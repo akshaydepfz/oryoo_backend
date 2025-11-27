@@ -10,6 +10,7 @@ import (
 func main() {
 	database.ConnectDatabase()
 	http.Handle("/users", http.HandlerFunc(handler.UserHandler))
+	http.HandleFunc("/auth/check-phone", handler.CheckPhoneHandler)
 
 	http.ListenAndServe(":8080", nil)
 }

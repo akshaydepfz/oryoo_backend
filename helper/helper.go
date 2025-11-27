@@ -67,3 +67,20 @@ func GetUsers() ([]models.User, error) {
 	fmt.Println("Get Users Successful")
 	return usersList, nil
 }
+
+func CheckPhoneExists(phone string) (bool, error) {
+	var exists bool
+
+	query := `
+		SELECT EXISTS (
+			SELECT 1 FROM users WHERE phone = $1
+		)
+	`
+
+	err := DB.QueryRow(query, phone).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+
+	return exists, nil
+}

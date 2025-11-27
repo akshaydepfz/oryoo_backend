@@ -29,3 +29,11 @@ type User struct {
 	CreatedDate   time.Time `json:"created_date"`
 	UpdatedDate   time.Time `json:"updated_date"`
 }
+
+type CheckPhoneRequest struct {
+	Phone string `json:"phone"`
+}
+
+type CheckPhoneResponse struct {
+	IsAlreadyRegistered bool `json:"is_already_registered"`
+}
