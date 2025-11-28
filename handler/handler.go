@@ -174,6 +174,18 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func GetUserByFirebaseUID(w http.ResponseWriter, r *http.Request) {
+	firebaseUID := r.URL.Query().Get("firebase_uid")
+	user, err := helper.GetUserByFirebaseUID(firebaseUID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
+}
+
 func ClientHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		CreateClient(w, r)

@@ -14,6 +14,7 @@ func main() {
 	http.HandleFunc("/auth/register", handler.CreateUserHandler)
 	http.HandleFunc("/clients", handler.ClientHandler)
 	http.HandleFunc("/clients/created-by", handler.GetClientByCreatedBy)
+	http.HandleFunc("/users/firebase-uid", handler.GetUserByFirebaseUID)
 
 	http.ListenAndServe(":8080", nil)
 }

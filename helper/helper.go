@@ -261,3 +261,60 @@ func GetClientsByCreatedBy(createdBy string) ([]models.ClientModel, error) {
 	fmt.Println("Get Clients by Created By Successful")
 	return clientsList, nil
 }
+
+func GetUserByFirebaseUID(firebaseUID string) (models.User, error) {
+	rows, err := DB.Query(`
+		SELECT 
+			id, firebase_uid, phone, name, email, business_name,
+			brand_image,
+			country, state, city, address, pincode,
+			last_login, last_active,
+			device_id, device_model, app_version,
+			is_premium, plan_name, plan_expiry,
+			rating, account_status,
+			referral_code, referred_by,
+			created_date, updated_date
+		FROM users WHERE firebase_uid = $1
+	`, firebaseUID)
+	if err != nil {
+		return models.User{}, err
+	}
+	defer rows.Close()
+
+	var user models.User
+	for rows.Next() {
+		err := rows.Scan(
+			&user.ID,
+			&user.FirebaseUID,
+			&user.Phone,
+			&user.Name,
+			&user.Email,
+			&user.BusinessName,
+			&user.BrandImage,
+			&user.Country,
+			&user.State,
+			&user.City,
+			&user.Address,
+			&user.Pincode,
+			&user.LastLogin,
+			&user.LastActive,
+			&user.DeviceID,
+			&user.DeviceModel,
+			&user.AppVersion,
+			&user.IsPremium,
+			&user.PlanName,
+			&user.PlanExpiry,
+			&user.Rating,
+			&user.AccountStatus,
+			&user.ReferralCode,
+			&user.ReferredBy,
+			&user.CreatedDate,
+			&user.UpdatedDate,
+		)
+		if err != nil {
+			return models.User{}, err
+		}
+	}
+
+	return user, nil
+}
