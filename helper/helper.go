@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/lib/pq"
 	"oryoo.com/models"
 )
 
@@ -127,4 +128,136 @@ func InsertUser(user models.User) error {
 	)
 
 	return err
+}
+
+func InsertClient(client *models.ClientModel) error {
+	query := `
+		INSERT INTO clients (
+			name, email, phone, added_by,
+			alternate_phone, avatar, status,
+			total_orders, total_spent, join_date,
+			address, tags,
+			last_order_date, website, notes, company_name,
+			created_at, updated_at
+		)
+		VALUES (
+			$1, $2, $3, $4,
+			$5, $6, $7,
+			$8, $9, $10,
+			$11, $12,
+			$13, $14, $15, $16,
+			$17, $18
+		)
+		RETURNING id
+	`
+
+	err := DB.QueryRow(
+		query,
+		client.Name,
+		client.Email,
+		client.Phone,
+		client.AddedBy,
+		client.AlternatePhone,
+		client.Avatar,
+		client.Status,
+		client.TotalOrders,
+		client.TotalSpent,
+		client.JoinDate,
+		client.Address,
+		pq.Array(client.Tags),
+		client.LastOrderDate,
+		client.Website,
+		client.Notes,
+		client.CompanyName,
+		client.CreatedAt,
+		client.UpdatedAt,
+	).Scan(&client.ID)
+
+	return err
+}
+
+func GetClients() ([]models.ClientModel, error) {
+	rows, err := DB.Query(`
+		SELECT * FROM clients
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var clientsList []models.ClientModel
+	for rows.Next() {
+		var client models.ClientModel
+		err := rows.Scan(
+			&client.ID,
+			&client.Name,
+			&client.Email,
+			&client.Phone,
+			&client.AddedBy,
+			&client.AlternatePhone,
+			&client.Avatar,
+			&client.Status,
+			&client.TotalOrders,
+			&client.TotalSpent,
+			&client.JoinDate,
+			&client.Address,
+			pq.Array(&client.Tags),
+			&client.LastOrderDate,
+			&client.Website,
+			&client.Notes,
+			&client.CompanyName,
+			&client.CreatedAt,
+			&client.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		clientsList = append(clientsList, client)
+	}
+
+	fmt.Println("Get Clients Successful")
+	return clientsList, nil
+}
+
+func GetClientsByCreatedBy(createdBy string) ([]models.ClientModel, error) {
+	rows, err := DB.Query(`
+		SELECT * FROM clients WHERE added_by = $1
+	`, createdBy)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var clientsList []models.ClientModel
+	for rows.Next() {
+		var client models.ClientModel
+		err := rows.Scan(
+			&client.ID,
+			&client.Name,
+			&client.Email,
+			&client.Phone,
+			&client.AddedBy,
+			&client.AlternatePhone,
+			&client.Avatar,
+			&client.Status,
+			&client.TotalOrders,
+			&client.TotalSpent,
+			&client.JoinDate,
+			&client.Address,
+			pq.Array(&client.Tags),
+			&client.LastOrderDate,
+			&client.Website,
+			&client.Notes,
+			&client.CompanyName,
+			&client.CreatedAt,
+			&client.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		clientsList = append(clientsList, client)
+	}
+
+	fmt.Println("Get Clients by Created By Successful")
+	return clientsList, nil
 }

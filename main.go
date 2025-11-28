@@ -12,6 +12,8 @@ func main() {
 	http.Handle("/users", http.HandlerFunc(handler.UserHandler))
 	http.HandleFunc("/auth/check-phone", handler.CheckPhoneHandler)
 	http.HandleFunc("/auth/register", handler.CreateUserHandler)
+	http.HandleFunc("/clients", handler.ClientHandler)
+	http.HandleFunc("/clients/created-by", handler.GetClientByCreatedBy)
 
 	http.ListenAndServe(":8080", nil)
 }

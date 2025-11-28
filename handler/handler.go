@@ -171,4 +171,61 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 		"message": "User created successfully",
 		"user":    user,
 	})
+
+}
+
+func ClientHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		CreateClient(w, r)
+
+	} else if r.Method == http.MethodGet {
+		GetClients(w, r)
+
+	} else {
+		http.Error(w, "Invalid request method", http.StatusBadRequest)
+	}
+
+}
+
+func CreateClient(w http.ResponseWriter, r *http.Request) {
+	var c models.ClientModel
+
+	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	now := time.Now()
+	c.CreatedAt = &now
+	c.UpdatedAt = &now
+	err := helper.InsertClient(&c)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(c)
+}
+
+func GetClients(w http.ResponseWriter, r *http.Request) {
+	clients, err := helper.GetClients()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(clients)
+}
+func GetClientByCreatedBy(w http.ResponseWriter, r *http.Request) {
+	createdBy := r.URL.Query().Get("created_by")
+	clients, err := helper.GetClientsByCreatedBy(createdBy)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(clients)
 }

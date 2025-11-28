@@ -48,3 +48,25 @@ type CheckPhoneRequest struct {
 type CheckPhoneResponse struct {
 	IsAlreadyRegistered bool `json:"is_already_registered"`
 }
+
+type ClientModel struct {
+	ID             string     `json:"id" db:"id"`
+	Name           string     `json:"name" db:"name"`
+	Email          string     `json:"email" db:"email"`
+	Phone          string     `json:"phone" db:"phone"`
+	AddedBy        string     `json:"added_by" db:"added_by"`
+	AlternatePhone *string    `json:"alternate_phone" db:"alternate_phone"`
+	Avatar         *string    `json:"avatar" db:"avatar"`
+	Status         string     `json:"status" db:"status"`
+	TotalOrders    int        `json:"total_orders" db:"total_orders"`
+	TotalSpent     float64    `json:"total_spent" db:"total_spent"`
+	JoinDate       time.Time  `json:"join_date" db:"join_date"`
+	Address        string     `json:"address" db:"address"`
+	Tags           []string   `json:"tags" db:"tags"` // jsonb[] in PostgreSQL
+	LastOrderDate  *time.Time `json:"last_order_date" db:"last_order_date"`
+	Website        *string    `json:"website" db:"website"`
+	Notes          *string    `json:"notes" db:"notes"`
+	CompanyName    *string    `json:"company_name" db:"company_name"`
+	CreatedAt      *time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt      *time.Time `json:"updated_at" db:"updated_at"`
+}
