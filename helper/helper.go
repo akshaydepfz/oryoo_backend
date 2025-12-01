@@ -1,8 +1,10 @@
 package helper
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"log"
 
 	"github.com/lib/pq"
 	"oryoo.com/models"
@@ -317,4 +319,204 @@ func GetUserByFirebaseUID(firebaseUID string) (models.User, error) {
 	}
 
 	return user, nil
+}
+
+func InsertOrder(orderID, orderNumber string, req models.CreateOrderRequest) error {
+	query := `
+		INSERT INTO orders (
+			id,
+			order_number,
+			client_id,
+			client_name,
+			client_avatar,
+			total_amount,
+			status,
+			payment_status,
+			created_at,
+			delivery_date,
+			delivery_address,
+			notes,
+			added_by,
+			created_by     -- NEW FIELD
+		)
+		VALUES (
+			$1, $2, $3, $4, $5,
+			$6, $7, $8,
+			NOW(),
+			$9,
+			$10,
+			$11,
+			$12,
+			$13
+		);
+	`
+
+	_, err := DB.ExecContext(
+		context.Background(),
+		query,
+		orderID,
+		orderNumber,
+		req.ClientID,
+		req.ClientName,
+		req.ClientAvatar,
+		req.TotalAmount,
+		req.Status,
+		req.PaymentStatus,
+		req.DeliveryDate,
+		req.DeliveryAddress,
+		req.Notes,
+		req.AddedBy,
+		req.CreatedBy, // NEW VALUE
+	)
+
+	return err
+}
+
+func InsertOrderItem(orderID string, itemID string, item models.OrderItemModel) error {
+	query := `
+		INSERT INTO order_items (
+			id,
+			order_id,
+			name,
+			description,
+			price,
+			quantity,
+			created_at
+		)
+		VALUES (
+			$1, $2, $3, $4, $5, $6, NOW()
+		);
+	`
+
+	_, err := DB.ExecContext(
+		context.Background(),
+		query,
+		itemID,
+		orderID,
+		item.Name,
+		item.Description,
+		item.Price,
+		item.Quantity,
+	)
+
+	if err != nil {
+		log.Printf("InsertOrderItem error: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+func FetchOrdersByCreatedBy(createdBy string) ([]models.OrderModel, error) {
+	query := `
+		SELECT 
+			id,
+			order_number,
+			client_id,
+			client_name,
+			client_avatar,
+			total_amount,
+			status,
+			payment_status,
+			created_at,
+			updated_at,
+			delivery_date,
+			delivery_address,
+			notes,
+			added_by,
+			created_by
+		FROM orders
+		WHERE created_by = $1
+		ORDER BY created_at DESC;
+	`
+
+	rows, err := DB.QueryContext(context.Background(), query, createdBy)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var orders []models.OrderModel
+
+	for rows.Next() {
+		var o models.OrderModel
+
+		err := rows.Scan(
+			&o.ID,
+			&o.OrderNumber,
+			&o.ClientID,
+			&o.ClientName,
+			&o.ClientAvatar,
+			&o.TotalAmount,
+			&o.Status,
+			&o.PaymentStatus,
+			&o.CreatedAt,
+			&o.UpdatedAt,
+			&o.DeliveryDate,
+			&o.DeliveryAddress,
+			&o.Notes,
+			&o.AddedBy,
+			&o.CreatedBy,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		// 🔥 FETCH ITEMS HERE
+		items, err := FetchOrderItems(o.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		o.Items = items
+
+		orders = append(orders, o)
+	}
+
+	return orders, nil
+}
+func FetchOrderItems(orderID string) ([]models.OrderItemModel, error) {
+	query := `
+		SELECT 
+			id,
+			order_id,
+			name,
+			description,
+			price,
+			quantity,
+			created_at
+		FROM order_items
+		WHERE order_id = $1;
+	`
+
+	rows, err := DB.QueryContext(context.Background(), query, orderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []models.OrderItemModel
+
+	for rows.Next() {
+		var it models.OrderItemModel
+
+		err := rows.Scan(
+			&it.ID,
+			&it.OrderID,
+			&it.Name,
+			&it.Description,
+			&it.Price,
+			&it.Quantity,
+			&it.CreatedAt,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		items = append(items, it)
+	}
+
+	return items, nil
 }

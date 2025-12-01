@@ -70,3 +70,79 @@ func CreateClientsTable() error {
 	fmt.Println("Clients table created successfully")
 	return nil
 }
+
+func CreateOrdersTable() error {
+	query := `
+		CREATE TABLE IF NOT EXISTS orders (
+			id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+			order_number TEXT NOT NULL UNIQUE,
+
+			client_id TEXT NOT NULL,
+			client_name TEXT NOT NULL,
+			client_avatar TEXT,
+
+			total_amount DOUBLE PRECISION NOT NULL DEFAULT 0,
+
+			status TEXT NOT NULL DEFAULT 'Pending',
+			payment_status TEXT NOT NULL DEFAULT 'Pending',
+
+			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMP,
+			delivery_date TIMESTAMP,
+
+			delivery_address TEXT NOT NULL,
+			notes TEXT,
+			added_by TEXT
+		);
+	`
+
+	_, err := helper.DB.ExecContext(context.Background(), query)
+	if err != nil {
+		log.Printf("Error creating orders table: %v", err)
+		return err
+	}
+
+	fmt.Println("Orders table created successfully")
+	return nil
+}
+
+func CreateOrderItemsTable() error {
+	query := `
+		CREATE TABLE IF NOT EXISTS order_items (
+			id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+			order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+
+			name TEXT NOT NULL,
+			description TEXT,
+			price DOUBLE PRECISION NOT NULL DEFAULT 0,
+			quantity INTEGER NOT NULL DEFAULT 1,
+
+			created_at TIMESTAMP NOT NULL DEFAULT NOW()
+		);
+	`
+
+	_, err := helper.DB.ExecContext(context.Background(), query)
+	if err != nil {
+		log.Printf("Error creating order_items table: %v", err)
+		return err
+	}
+
+	fmt.Println("Order items table created successfully")
+	return nil
+}
+
+func AddCreatedByColumnToOrders() error {
+	query := `
+		ALTER TABLE orders 
+		ADD COLUMN IF NOT EXISTS created_by TEXT;
+	`
+
+	_, err := helper.DB.ExecContext(context.Background(), query)
+	if err != nil {
+		log.Printf("Error altering orders table (created_by): %v", err)
+		return err
+	}
+
+	fmt.Println("Column 'created_by' added to orders table successfully")
+	return nil
+}

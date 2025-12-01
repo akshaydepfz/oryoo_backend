@@ -70,3 +70,48 @@ type ClientModel struct {
 	CreatedAt      *time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt      *time.Time `json:"updated_at" db:"updated_at"`
 }
+
+type OrderItemModel struct {
+	ID          string  `json:"id"`
+	OrderID     string  `json:"order_id"`
+	Name        string  `json:"name"`
+	Description string  `json:"description,omitempty"`
+	Price       float64 `json:"price"`
+	Quantity    int     `json:"quantity"`
+	CreatedAt   string  `json:"created_at"`
+}
+
+type OrderModel struct {
+	ID              string           `json:"id"`
+	OrderNumber     string           `json:"order_number"`
+	ClientID        string           `json:"client_id"`
+	ClientName      string           `json:"client_name"`
+	ClientAvatar    *string          `json:"client_avatar,omitempty"`
+	TotalAmount     float64          `json:"total_amount"`
+	Status          string           `json:"status"`
+	PaymentStatus   string           `json:"payment_status"`
+	Items           []OrderItemModel `json:"items"`
+	CreatedAt       string           `json:"created_at"`
+	UpdatedAt       *string          `json:"updated_at,omitempty"`
+	DeliveryDate    *string          `json:"delivery_date,omitempty"`
+	DeliveryAddress string           `json:"delivery_address"`
+	Notes           *string          `json:"notes,omitempty"`
+	AddedBy         *string          `json:"added_by,omitempty"`
+	CreatedBy       *string          `json:"created_by,omitempty"` // NEW FIELD
+}
+
+type CreateOrderRequest struct {
+	ClientID        string  `json:"client_id"`
+	ClientName      string  `json:"client_name"`
+	ClientAvatar    *string `json:"client_avatar"`
+	TotalAmount     float64 `json:"total_amount"`
+	Status          string  `json:"status"`
+	PaymentStatus   string  `json:"payment_status"`
+	DeliveryAddress string  `json:"delivery_address"`
+	DeliveryDate    *string `json:"delivery_date"`
+	Notes           *string `json:"notes"`
+	AddedBy         *string `json:"added_by"`
+	CreatedBy       *string `json:"created_by"` // NEW FIELD
+
+	Items []OrderItemModel `json:"items"`
+}

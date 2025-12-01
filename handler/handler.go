@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -240,4 +242,65 @@ func GetClientByCreatedBy(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(clients)
+}
+
+func CreateOrder(w http.ResponseWriter, r *http.Request) {
+	var req models.CreateOrderRequest
+
+	// Decode JSON
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Generate IDs
+	orderID := uuid.New().String()
+	orderNumber := "ORD-" + time.Now().Format("20060102-150405")
+
+	// Insert order
+	err := helper.InsertOrder(orderID, orderNumber, req)
+	if err != nil {
+		http.Error(w, "Failed to insert order", http.StatusInternalServerError)
+		return
+	}
+
+	// Insert items
+	for _, item := range req.Items {
+		itemID := uuid.New().String()
+		err := helper.InsertOrderItem(orderID, itemID, item)
+		if err != nil {
+			http.Error(w, "Failed to insert order items", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Response
+	response := map[string]interface{}{
+		"success":      true,
+		"message":      "Order created successfully",
+		"order_id":     orderID,
+		"order_number": orderNumber,
+		"created_by":   req.CreatedBy, // NEW
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+func GetOrdersByCreatedBy(w http.ResponseWriter, r *http.Request) {
+	createdBy := r.URL.Query().Get("created_by")
+
+	if createdBy == "" {
+		http.Error(w, "created_by is required", http.StatusBadRequest)
+		return
+	}
+
+	orders, err := helper.FetchOrdersByCreatedBy(createdBy)
+	if err != nil {
+		http.Error(w, "Failed to fetch orders", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(orders)
 }
