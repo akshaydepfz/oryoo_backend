@@ -304,3 +304,58 @@ func GetOrdersByCreatedBy(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(orders)
 }
+
+func CreatePayment(w http.ResponseWriter, r *http.Request) {
+	var req models.CreatePaymentRequest
+
+	// Decode JSON
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Generate ID
+	paymentID := uuid.New().String()
+
+	// Insert payment
+	err := helper.InsertPayment(paymentID, req)
+	if err != nil {
+		http.Error(w, "Failed to insert payment", http.StatusInternalServerError)
+		return
+	}
+
+	// Response
+	response := map[string]interface{}{
+		"success":    true,
+		"message":    "Payment created successfully",
+		"payment_id": paymentID,
+		"created_by": req.CreatedBy,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+func GetPaymentsByCreatedByHandler(w http.ResponseWriter, r *http.Request) {
+	createdBy := r.URL.Query().Get("created_by")
+
+	if createdBy == "" {
+		http.Error(w, "created_by is required", http.StatusBadRequest)
+		return
+	}
+
+	payments, err := helper.GetPaymentsByCreatedBy(createdBy)
+	if err != nil {
+		http.Error(w, "Failed to fetch payments", http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]interface{}{
+		"success":  true,
+		"count":    len(payments),
+		"payments": payments,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}

@@ -17,6 +17,8 @@ func main() {
 	http.HandleFunc("/users/firebase-uid", handler.GetUserByFirebaseUID)
 	http.HandleFunc("/orders/create", handler.CreateOrder)
 	http.HandleFunc("/orders/by-created", handler.GetOrdersByCreatedBy)
+	http.HandleFunc("/payments/create", handler.CreatePayment)
+	http.HandleFunc("/payments/by-created", handler.GetPaymentsByCreatedByHandler)
 
 	http.ListenAndServe(":8080", nil)
 }

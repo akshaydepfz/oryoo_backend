@@ -115,3 +115,36 @@ type CreateOrderRequest struct {
 
 	Items []OrderItemModel `json:"items"`
 }
+
+type PaymentModel struct {
+	ID            string     `json:"id" db:"id"`
+	ClientID      string     `json:"client_id" db:"client_id"`
+	ClientName    string     `json:"client_name" db:"client_name"`
+	ClientAvatar  *string    `json:"client_avatar" db:"client_avatar"`
+	Amount        float64    `json:"amount" db:"amount"`
+	Date          time.Time  `json:"date" db:"date"`
+	Status        string     `json:"status" db:"status"`
+	OrderID       string     `json:"order_id" db:"order_id"`
+	PaymentMethod string     `json:"payment_method" db:"payment_method"`
+	PaidAmount    *float64   `json:"paid_amount" db:"paid_amount"`
+	Notes         *string    `json:"notes" db:"notes"`
+	CreatedBy     *string    `json:"created_by" db:"created_by"`
+	AddedBy       *string    `json:"added_by" db:"added_by"` // NEW FIELD
+	CreatedAt     *time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt     *time.Time `json:"updated_at" db:"updated_at"`
+}
+
+type CreatePaymentRequest struct {
+	ClientID      string    `json:"client_id"`
+	ClientName    string    `json:"client_name"`
+	ClientAvatar  *string   `json:"client_avatar"`
+	Amount        float64   `json:"amount"`
+	Date          time.Time `json:"date"`
+	Status        string    `json:"status"`
+	OrderID       string    `json:"order_id"`
+	PaymentMethod string    `json:"payment_method"`
+	PaidAmount    *float64  `json:"paid_amount"`
+	Notes         *string   `json:"notes"`
+	CreatedBy     *string   `json:"created_by"`
+	AddedBy       *string   `json:"added_by"`
+}

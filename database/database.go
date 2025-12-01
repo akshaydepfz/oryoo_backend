@@ -146,3 +146,49 @@ func AddCreatedByColumnToOrders() error {
 	fmt.Println("Column 'created_by' added to orders table successfully")
 	return nil
 }
+
+func CreatePaymentsTable() error {
+	query := `
+		CREATE TABLE IF NOT EXISTS payments (
+			id TEXT PRIMARY KEY,
+			client_id TEXT NOT NULL,
+			client_name TEXT NOT NULL,
+			client_avatar TEXT,
+			amount NUMERIC(10,2) NOT NULL,
+			date TIMESTAMP NOT NULL,
+			status TEXT NOT NULL,
+			order_id TEXT NOT NULL,
+			payment_method TEXT NOT NULL,
+			paid_amount NUMERIC(10,2),
+			notes TEXT,
+			created_by TEXT,
+			created_at TIMESTAMP DEFAULT NOW(),
+			updated_at TIMESTAMP DEFAULT NOW()
+		);
+	`
+
+	_, err := helper.DB.ExecContext(context.Background(), query)
+	if err != nil {
+		log.Printf("Error creating payments table: %v", err)
+		return err
+	}
+
+	fmt.Println("Table 'payments' created successfully")
+	return nil
+}
+
+func AddAddedByColumnToPayments() error {
+	query := `
+		ALTER TABLE payments
+		ADD COLUMN IF NOT EXISTS added_by TEXT;
+	`
+
+	_, err := helper.DB.ExecContext(context.Background(), query)
+	if err != nil {
+		log.Printf("Error altering payments table (added_by): %v", err)
+		return err
+	}
+
+	fmt.Println("Column 'added_by' added to payments table successfully")
+	return nil
+}

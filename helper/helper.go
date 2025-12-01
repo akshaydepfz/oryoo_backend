@@ -520,3 +520,112 @@ func FetchOrderItems(orderID string) ([]models.OrderItemModel, error) {
 
 	return items, nil
 }
+
+func InsertPayment(paymentID string, req models.CreatePaymentRequest) error {
+	query := `
+		INSERT INTO payments (
+			id,
+			client_id,
+			client_name,
+			client_avatar,
+			amount,
+			date,
+			status,
+			order_id,
+			payment_method,
+			paid_amount,
+			notes,
+			created_by,
+			added_by,        -- NEW COLUMN
+			created_at,
+			updated_at
+		)
+		VALUES (
+			$1, $2, $3, $4,
+			$5, $6, $7, $8,
+			$9, $10, $11, $12,
+			$13,             -- NEW VALUE
+			NOW(), NOW()
+		);
+	`
+
+	_, err := DB.ExecContext(
+		context.Background(),
+		query,
+		paymentID,
+		req.ClientID,
+		req.ClientName,
+		req.ClientAvatar,
+		req.Amount,
+		req.Date,
+		req.Status,
+		req.OrderID,
+		req.PaymentMethod,
+		req.PaidAmount,
+		req.Notes,
+		req.CreatedBy,
+		req.AddedBy, // NEW FIELD
+	)
+
+	return err
+}
+
+func GetPaymentsByCreatedBy(createdBy string) ([]models.PaymentModel, error) {
+	rows, err := DB.Query(`
+		SELECT 
+			id,
+			client_id,
+			client_name,
+			client_avatar,
+			amount,
+			date,
+			status,
+			order_id,
+			payment_method,
+			paid_amount,
+			notes,
+			created_by,
+			added_by,
+			created_at,
+			updated_at
+		FROM payments
+		WHERE created_by = $1
+		ORDER BY created_at DESC
+	`, createdBy)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var payments []models.PaymentModel
+
+	for rows.Next() {
+		var p models.PaymentModel
+
+		err := rows.Scan(
+			&p.ID,
+			&p.ClientID,
+			&p.ClientName,
+			&p.ClientAvatar,
+			&p.Amount,
+			&p.Date,
+			&p.Status,
+			&p.OrderID,
+			&p.PaymentMethod,
+			&p.PaidAmount,
+			&p.Notes,
+			&p.CreatedBy,
+			&p.AddedBy,
+			&p.CreatedAt,
+			&p.UpdatedAt,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		payments = append(payments, p)
+	}
+
+	return payments, nil
+}
