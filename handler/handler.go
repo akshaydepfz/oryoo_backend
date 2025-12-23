@@ -423,6 +423,14 @@ func CreatePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// If full payment and order_id provided, mark order as paid/completed
+	if req.OrderID != "" && strings.EqualFold(req.Status, "paid") {
+		if err := helper.MarkOrderPaid(req.OrderID); err != nil {
+			http.Error(w, "Failed to update order payment status", http.StatusInternalServerError)
+			return
+		}
+	}
+
 	// Response
 	response := map[string]interface{}{
 		"success":    true,
