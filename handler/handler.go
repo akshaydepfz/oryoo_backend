@@ -3,9 +3,11 @@ package handler
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"strings"
 	"time"
@@ -414,7 +416,7 @@ func CreatePayment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate ID
-	paymentID := uuid.New().String()
+	paymentID := generatePaymentID()
 
 	// Insert payment
 	err := helper.InsertPayment(paymentID, req)
@@ -444,6 +446,19 @@ func CreatePayment(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// generatePaymentID creates IDs like PAY-YYYYMMDD-XXXX
+func generatePaymentID() string {
+	datePart := time.Now().Format("20060102")
+
+	// 4-digit random number
+	n, err := rand.Int(rand.Reader, big.NewInt(10000))
+	if err != nil {
+		return "PAY-" + datePart + "-0000"
+	}
+
+	return fmt.Sprintf("PAY-%s-%04d", datePart, n.Int64())
 }
 
 func GetPaymentsByCreatedByHandler(w http.ResponseWriter, r *http.Request) {
