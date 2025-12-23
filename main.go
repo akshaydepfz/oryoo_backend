@@ -20,6 +20,5 @@ func main() {
 	http.HandleFunc("/orders/by-created", handler.GetOrdersByCreatedBy)
 	http.HandleFunc("/payments/create", handler.CreatePayment)
 	http.HandleFunc("/payments/by-created", handler.GetPaymentsByCreatedByHandler)
-
 	http.ListenAndServe(":8080", nil)
 }

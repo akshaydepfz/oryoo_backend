@@ -12,7 +12,7 @@ type User struct {
 	Email        string `json:"email"`
 	BusinessName string `json:"business_name"`
 
-	BrandImage string `json:"brand_image"` // NEW AWS image URL
+	BrandImage string `json:"brand_image"`
 
 	Country string `json:"country"`
 	State   string `json:"state"`
