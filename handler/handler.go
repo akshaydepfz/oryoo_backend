@@ -195,6 +195,9 @@ func ClientHandler(w http.ResponseWriter, r *http.Request) {
 	} else if r.Method == http.MethodGet {
 		GetClients(w, r)
 
+	} else if r.Method == http.MethodPut {
+		UpdateClient(w, r)
+
 	} else {
 		http.Error(w, "Invalid request method", http.StatusBadRequest)
 	}
@@ -232,6 +235,30 @@ func GetClients(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(clients)
 }
+
+func UpdateClient(w http.ResponseWriter, r *http.Request) {
+	var c models.ClientModel
+
+	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if c.ID == "" {
+		http.Error(w, "Client ID is required", http.StatusBadRequest)
+		return
+	}
+
+	err := helper.UpdateClient(&c)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(c)
+}
+
 func GetClientByCreatedBy(w http.ResponseWriter, r *http.Request) {
 	createdBy := r.URL.Query().Get("created_by")
 	clients, err := helper.GetClientsByCreatedBy(createdBy)

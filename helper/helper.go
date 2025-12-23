@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/lib/pq"
 	"oryoo.com/models"
@@ -174,6 +175,55 @@ func InsertClient(client *models.ClientModel) error {
 		client.CreatedAt,
 		client.UpdatedAt,
 	).Scan(&client.ID)
+
+	return err
+}
+
+func UpdateClient(client *models.ClientModel) error {
+	now := time.Now()
+	client.UpdatedAt = &now
+
+	query := `
+		UPDATE clients SET
+			name = $1,
+			email = $2,
+			phone = $3,
+			alternate_phone = $4,
+			avatar = $5,
+			status = $6,
+			total_orders = $7,
+			total_spent = $8,
+			join_date = $9,
+			address = $10,
+			tags = $11,
+			last_order_date = $12,
+			website = $13,
+			notes = $14,
+			company_name = $15,
+			updated_at = $16
+		WHERE id = $17
+	`
+
+	_, err := DB.Exec(
+		query,
+		client.Name,
+		client.Email,
+		client.Phone,
+		client.AlternatePhone,
+		client.Avatar,
+		client.Status,
+		client.TotalOrders,
+		client.TotalSpent,
+		client.JoinDate,
+		client.Address,
+		pq.Array(client.Tags),
+		client.LastOrderDate,
+		client.Website,
+		client.Notes,
+		client.CompanyName,
+		client.UpdatedAt,
+		client.ID,
+	)
 
 	return err
 }
