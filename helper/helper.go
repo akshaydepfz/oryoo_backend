@@ -521,8 +521,8 @@ func UpdateOrder(req models.OrderModel) error {
 	return err
 }
 
-// MarkOrderPaid sets payment_status to paid and status to completed for an order.
-func MarkOrderPaid(orderID string) error {
+// MarkOrderPaid sets payment_status to paid and status to completed for an order_number.
+func MarkOrderPaid(orderNumber string) error {
 	query := `
 		UPDATE orders
 		SET payment_status = 'paid',
@@ -531,7 +531,7 @@ func MarkOrderPaid(orderID string) error {
 		WHERE order_number = $1
 	`
 
-	_, err := DB.ExecContext(context.Background(), query, orderID)
+	_, err := DB.ExecContext(context.Background(), query, orderNumber)
 	return err
 }
 
