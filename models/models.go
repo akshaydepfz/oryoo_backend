@@ -116,6 +116,22 @@ type CreateOrderRequest struct {
 	Items []OrderItemModel `json:"items"`
 }
 
+type UpdateOrderRequest struct {
+	ID              string           `json:"id"`
+	ClientID        string           `json:"client_id"`
+	ClientName      string           `json:"client_name"`
+	ClientAvatar    *string          `json:"client_avatar"`
+	TotalAmount     float64          `json:"total_amount"`
+	Status          string           `json:"status"`
+	PaymentStatus   string           `json:"payment_status"`
+	DeliveryAddress string           `json:"delivery_address"`
+	DeliveryDate    *string          `json:"delivery_date"`
+	Notes           *string          `json:"notes"`
+	AddedBy         *string          `json:"added_by"`
+	CreatedBy       *string          `json:"created_by"`
+	Items           []OrderItemModel `json:"items"`
+}
+
 type PaymentModel struct {
 	ID            string     `json:"id" db:"id"`
 	ClientID      string     `json:"client_id" db:"client_id"`

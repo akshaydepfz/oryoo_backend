@@ -354,6 +354,38 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+func UpdateOrder(w http.ResponseWriter, r *http.Request) {
+	var req models.UpdateOrderRequest
+
+	// Decode JSON
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.ID == "" {
+		http.Error(w, "Order ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Update order
+	err := helper.UpdateOrder(req)
+	if err != nil {
+		http.Error(w, "Failed to update order: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Response
+	response := map[string]interface{}{
+		"success":  true,
+		"message":  "Order updated successfully",
+		"order_id": req.ID,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
 func GetOrdersByCreatedBy(w http.ResponseWriter, r *http.Request) {
 	createdBy := r.URL.Query().Get("created_by")
 

@@ -16,6 +16,7 @@ func main() {
 	http.HandleFunc("/clients/created-by", handler.GetClientByCreatedBy)
 	http.HandleFunc("/users/firebase-uid", handler.GetUserByFirebaseUID)
 	http.HandleFunc("/orders/create", handler.CreateOrder)
+	http.HandleFunc("/orders/update", handler.UpdateOrder)
 	http.HandleFunc("/orders/by-created", handler.GetOrdersByCreatedBy)
 	http.HandleFunc("/payments/create", handler.CreatePayment)
 	http.HandleFunc("/payments/by-created", handler.GetPaymentsByCreatedByHandler)

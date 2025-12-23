@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"oryoo.com/models"
 )
@@ -484,6 +485,75 @@ func InsertOrderItem(orderID string, itemID string, item models.OrderItemModel) 
 	if err != nil {
 		log.Printf("InsertOrderItem error: %v", err)
 		return err
+	}
+
+	return nil
+}
+
+func DeleteOrderItems(orderID string) error {
+	query := `DELETE FROM order_items WHERE order_id = $1`
+
+	_, err := DB.ExecContext(
+		context.Background(),
+		query,
+		orderID,
+	)
+
+	return err
+}
+
+func UpdateOrder(req models.UpdateOrderRequest) error {
+	query := `
+		UPDATE orders SET
+			client_id = $1,
+			client_name = $2,
+			client_avatar = $3,
+			total_amount = $4,
+			status = $5,
+			payment_status = $6,
+			delivery_date = $7,
+			delivery_address = $8,
+			notes = $9,
+			added_by = $10,
+			created_by = $11,
+			updated_at = NOW()
+		WHERE id = $12
+	`
+
+	_, err := DB.ExecContext(
+		context.Background(),
+		query,
+		req.ClientID,
+		req.ClientName,
+		req.ClientAvatar,
+		req.TotalAmount,
+		req.Status,
+		req.PaymentStatus,
+		req.DeliveryDate,
+		req.DeliveryAddress,
+		req.Notes,
+		req.AddedBy,
+		req.CreatedBy,
+		req.ID,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	// Delete existing order items
+	err = DeleteOrderItems(req.ID)
+	if err != nil {
+		return err
+	}
+
+	// Insert new order items
+	for _, item := range req.Items {
+		itemID := uuid.New().String()
+		err := InsertOrderItem(req.ID, itemID, item)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
