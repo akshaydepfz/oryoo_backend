@@ -423,6 +423,25 @@ func InsertOrder(orderID, orderNumber string, req models.CreateOrderRequest) err
 	return err
 }
 
+func UpdateClientStatsOnOrder(clientID string, orderAmount float64) error {
+	query := `
+		UPDATE clients SET
+			total_orders = total_orders + 1,
+			total_spent = total_spent + $1,
+			updated_at = NOW()
+		WHERE id = $2
+	`
+
+	_, err := DB.ExecContext(
+		context.Background(),
+		query,
+		orderAmount,
+		clientID,
+	)
+
+	return err
+}
+
 func InsertOrderItem(orderID string, itemID string, item models.OrderItemModel) error {
 	query := `
 		INSERT INTO order_items (

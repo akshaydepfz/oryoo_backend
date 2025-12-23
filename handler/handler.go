@@ -304,6 +304,13 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Update client stats (increment total_orders and add to total_spent)
+	err = helper.UpdateClientStatsOnOrder(req.ClientID, req.TotalAmount)
+	if err != nil {
+		http.Error(w, "Failed to update client stats", http.StatusInternalServerError)
+		return
+	}
+
 	// Response
 	response := map[string]interface{}{
 		"success":      true,
