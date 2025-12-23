@@ -229,6 +229,18 @@ func UpdateClient(client *models.ClientModel) error {
 	return err
 }
 
+func DeleteClient(clientID string) error {
+	query := `DELETE FROM clients WHERE id = $1`
+
+	_, err := DB.ExecContext(
+		context.Background(),
+		query,
+		clientID,
+	)
+
+	return err
+}
+
 func GetClients() ([]models.ClientModel, error) {
 	rows, err := DB.Query(`
 		SELECT * FROM clients

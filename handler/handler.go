@@ -198,6 +198,9 @@ func ClientHandler(w http.ResponseWriter, r *http.Request) {
 	} else if r.Method == http.MethodPut {
 		UpdateClient(w, r)
 
+	} else if r.Method == http.MethodDelete {
+		DeleteClient(w, r)
+
 	} else {
 		http.Error(w, "Invalid request method", http.StatusBadRequest)
 	}
@@ -260,6 +263,33 @@ func UpdateClient(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(c)
+}
+
+func DeleteClient(w http.ResponseWriter, r *http.Request) {
+	var req models.DeleteClientRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.ID == "" {
+		http.Error(w, "Client ID is required", http.StatusBadRequest)
+		return
+	}
+
+	err := helper.DeleteClient(req.ID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Client deleted successfully",
+		"id":      req.ID,
+	})
 }
 
 func GetClientByCreatedBy(w http.ResponseWriter, r *http.Request) {

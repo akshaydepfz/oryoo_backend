@@ -148,3 +148,7 @@ type CreatePaymentRequest struct {
 	CreatedBy     *string   `json:"created_by"`
 	AddedBy       *string   `json:"added_by"`
 }
+
+type DeleteClientRequest struct {
+	ID string `json:"id"`
+}
