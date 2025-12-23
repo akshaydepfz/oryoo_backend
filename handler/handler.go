@@ -355,7 +355,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 func UpdateOrder(w http.ResponseWriter, r *http.Request) {
-	var req models.UpdateOrderRequest
+	var req models.OrderModel
 
 	// Decode JSON
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

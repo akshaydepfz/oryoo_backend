@@ -502,7 +502,7 @@ func DeleteOrderItems(orderID string) error {
 	return err
 }
 
-func UpdateOrder(req models.UpdateOrderRequest) error {
+func UpdateOrder(req models.OrderModel) error {
 	query := `
 		UPDATE orders SET
 			client_id = $1,
