@@ -213,6 +213,7 @@ func CreateClient(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now()
+	c.JoinDate = now
 	c.CreatedAt = &now
 	c.UpdatedAt = &now
 	err := helper.InsertClient(&c)
@@ -249,6 +250,8 @@ func UpdateClient(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	now := time.Now()
+	c.JoinDate = now
 	err := helper.UpdateClient(&c)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

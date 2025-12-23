@@ -181,6 +181,7 @@ func InsertClient(client *models.ClientModel) error {
 
 func UpdateClient(client *models.ClientModel) error {
 	now := time.Now()
+	client.JoinDate = now
 	client.UpdatedAt = &now
 
 	query := `
