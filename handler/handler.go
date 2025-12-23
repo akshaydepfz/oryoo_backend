@@ -424,7 +424,7 @@ func CreatePayment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// If full payment and order_id (order_number) provided, mark order as paid/completed
-	if req.OrderID != "" && strings.EqualFold(req.Status, "Paid") {
+	if req.OrderID != "" && strings.EqualFold(req.Status, "paid") {
 		orderNumber := req.OrderID // client sends order_number in order_id field
 		if err := helper.MarkOrderPaid(orderNumber); err != nil {
 			http.Error(w, "Failed to update order payment status", http.StatusInternalServerError)

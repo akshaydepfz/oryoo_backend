@@ -525,8 +525,8 @@ func UpdateOrder(req models.OrderModel) error {
 func MarkOrderPaid(orderNumber string) error {
 	query := `
 		UPDATE orders
-		SET payment_status = 'Paid',
-		    status = 'Completed',
+		SET payment_status = 'paid',
+		    status = 'completed',
 		    updated_at = NOW()
 		WHERE order_number = $1
 	`
