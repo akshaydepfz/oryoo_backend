@@ -528,7 +528,7 @@ func MarkOrderPaid(orderID string) error {
 		SET payment_status = 'paid',
 		    status = 'completed',
 		    updated_at = NOW()
-		WHERE id = $1
+		WHERE order_number = $1
 	`
 
 	_, err := DB.ExecContext(context.Background(), query, orderID)
