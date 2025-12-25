@@ -152,3 +152,9 @@ type CreatePaymentRequest struct {
 type DeleteClientRequest struct {
 	ID string `json:"id"`
 }
+
+type VersionResponse struct {
+	Version     string `json:"version"`
+	UpdateURL   string `json:"update_url"`
+	IsMandatory bool   `json:"is_mandatory"`
+}
