@@ -14,11 +14,12 @@ type User struct {
 
 	BrandImage string `json:"brand_image"`
 
-	Country string `json:"country"`
-	State   string `json:"state"`
-	City    string `json:"city"`
-	Address string `json:"address"`
-	Pincode string `json:"pincode"`
+	Country        string `json:"country"`
+	State          string `json:"state"`
+	City           string `json:"city"`
+	Address        string `json:"address"`
+	Pincode        string `json:"pincode"`
+	TotalCustomers int    `json:"total_customers"`
 
 	LastLogin  time.Time `json:"last_login"`
 	LastActive time.Time `json:"last_active"`
