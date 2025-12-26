@@ -159,3 +159,31 @@ type VersionResponse struct {
 	UpdateURL   string `json:"update_url"`
 	IsMandatory bool   `json:"is_mandatory"`
 }
+
+type BillingTransaction struct {
+	ID                string    `json:"id" db:"id"`
+	UserID            string    `json:"user_id" db:"user_id"`
+	PlanID            string    `json:"plan_id" db:"plan_id"`
+	PlanName          string    `json:"plan_name" db:"plan_name"`
+	RazorpayOrderID   string    `json:"razorpay_order_id" db:"razorpay_order_id"`
+	RazorpayPaymentID string    `json:"razorpay_payment_id" db:"razorpay_payment_id"`
+	RazorpaySignature string    `json:"razorpay_signature" db:"razorpay_signature"`
+	Amount            int       `json:"amount" db:"amount"`     // 9900 paise
+	Currency          string    `json:"currency" db:"currency"` // INR
+	Status            string    `json:"status" db:"status"`     // success
+	PlanExpiry        time.Time `json:"plan_expiry" db:"plan_expiry"`
+	CreatedAt         time.Time `json:"created_at" db:"created_at"`
+}
+
+type CreateBillingTransactionRequest struct {
+	UserID            string    `json:"user_id"` // firebase_uid
+	PlanID            string    `json:"plan_id"`
+	PlanName          string    `json:"plan_name"` // e.g., "Premium Monthly", "Premium Yearly"
+	RazorpayOrderID   string    `json:"razorpay_order_id"`
+	RazorpayPaymentID string    `json:"razorpay_payment_id"`
+	RazorpaySignature string    `json:"razorpay_signature"`
+	Amount            int       `json:"amount"`      // amount in paise
+	Currency          string    `json:"currency"`    // INR
+	Status            string    `json:"status"`      // success, failed, pending
+	PlanExpiry        time.Time `json:"plan_expiry"` // when the plan expires
+}

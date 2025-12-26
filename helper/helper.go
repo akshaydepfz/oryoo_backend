@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"oryoo.com/models"
 )
@@ -784,4 +785,75 @@ func GetPaymentsByCreatedBy(createdBy string) ([]models.PaymentModel, error) {
 	}
 
 	return payments, nil
+}
+
+func InsertBillingTransaction(req models.CreateBillingTransactionRequest) (string, error) {
+	transactionID := uuid.New().String()
+
+	query := `
+		INSERT INTO billing_transactions (
+			id,
+			user_id,
+			plan_id,
+			plan_name,
+			razorpay_order_id,
+			razorpay_payment_id,
+			razorpay_signature,
+			amount,
+			currency,
+			status,
+			plan_expiry,
+			created_at
+		)
+		VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW()
+		)
+		RETURNING id
+	`
+
+	err := DB.QueryRow(
+		query,
+		transactionID,
+		req.UserID,
+		req.PlanID,
+		req.PlanName,
+		req.RazorpayOrderID,
+		req.RazorpayPaymentID,
+		req.RazorpaySignature,
+		req.Amount,
+		req.Currency,
+		req.Status,
+		req.PlanExpiry,
+	).Scan(&transactionID)
+
+	if err != nil {
+		return "", err
+	}
+
+	return transactionID, nil
+}
+
+func UpdateUserPlanData(firebaseUID string, planName string, planExpiry time.Time) error {
+	query := `
+		UPDATE users SET
+			is_premium = $1,
+			plan_name = $2,
+			plan_expiry = $3,
+			updated_date = NOW()
+		WHERE firebase_uid = $4
+	`
+
+	_, err := DB.Exec(
+		query,
+		true,        // is_premium = true
+		planName,    // plan_name
+		planExpiry,  // plan_expiry
+		firebaseUID, // user_id (firebase_uid)
+	)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

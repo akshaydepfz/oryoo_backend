@@ -208,3 +208,31 @@ func AddtotalCustomersInUsersTable() error {
 	fmt.Println("Column 'total_customers' added to users table successfully")
 	return nil
 }
+
+func CreateBillingTransactionsTable() error {
+	query := `
+		CREATE TABLE IF NOT EXISTS billing_transactions (
+			id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+			user_id TEXT NOT NULL,
+			plan_id TEXT NOT NULL,
+			plan_name TEXT NOT NULL,
+			razorpay_order_id TEXT,
+			razorpay_payment_id TEXT,
+			razorpay_signature TEXT,
+			amount INTEGER NOT NULL,
+			currency TEXT NOT NULL DEFAULT 'INR',
+			status TEXT NOT NULL,
+			plan_expiry TIMESTAMP NOT NULL,
+			created_at TIMESTAMP DEFAULT NOW()
+		);
+	`
+
+	_, err := helper.DB.ExecContext(context.Background(), query)
+	if err != nil {
+		log.Printf("Error creating billing_transactions table: %v", err)
+		return err
+	}
+
+	fmt.Println("Billing transactions table created successfully")
+	return nil
+}

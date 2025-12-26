@@ -500,3 +500,56 @@ func GetLatestVersionHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(version)
 }
+
+func CreateBillingTransactionHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req models.CreateBillingTransactionRequest
+
+	// Decode JSON
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Validate required fields
+	if req.UserID == "" || req.PlanID == "" || req.PlanName == "" {
+		http.Error(w, "user_id, plan_id, and plan_name are required", http.StatusBadRequest)
+		return
+	}
+
+	if req.Status == "" {
+		http.Error(w, "status is required", http.StatusBadRequest)
+		return
+	}
+
+	// Insert billing transaction and update user plan
+	transactionID, err := helper.InsertBillingTransaction(req)
+	if err != nil {
+		http.Error(w, "Failed to create billing transaction: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Only update user plan if transaction status is success
+	if req.Status == "success" {
+		err = helper.UpdateUserPlanData(req.UserID, req.PlanName, req.PlanExpiry)
+		if err != nil {
+			http.Error(w, "Transaction created but failed to update user plan: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	response := map[string]interface{}{
+		"success":        true,
+		"message":        "Billing transaction created successfully",
+		"transaction_id": transactionID,
+		"user_id":        req.UserID,
+		"plan_name":      req.PlanName,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
