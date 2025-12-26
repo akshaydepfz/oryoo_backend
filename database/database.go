@@ -32,6 +32,7 @@ func ConnectDatabase() {
 	if err = helper.DB.Ping(); err != nil {
 		log.Fatalf("Error connecting to the database: %v", err)
 	}
+
 	fmt.Println("Database connection established")
 
 }
@@ -190,5 +191,20 @@ func AddAddedByColumnToPayments() error {
 	}
 
 	fmt.Println("Column 'added_by' added to payments table successfully")
+	return nil
+}
+func AddtotalCustomersInUsersTable() error {
+	query := `
+		ALTER TABLE users
+		ADD COLUMN IF NOT EXISTS total_customers INTEGER NOT NULL DEFAULT 0;
+	`
+
+	_, err := helper.DB.ExecContext(context.Background(), query)
+	if err != nil {
+		log.Printf("Error altering users table (total_customers): %v", err)
+		return err
+	}
+
+	fmt.Println("Column 'total_customers' added to users table successfully")
 	return nil
 }

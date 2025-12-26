@@ -133,6 +133,17 @@ func InsertUser(user models.User) error {
 	return err
 }
 
+func IncrementUserTotalCustomers(firebaseUID string) error {
+	query := `
+		UPDATE users SET
+			total_customers = total_customers + 1
+		WHERE firebase_uid = $1
+	`
+
+	_, err := DB.Exec(query, firebaseUID)
+	return err
+}
+
 func InsertClient(client *models.ClientModel) error {
 	query := `
 		INSERT INTO clients (
@@ -176,7 +187,20 @@ func InsertClient(client *models.ClientModel) error {
 		client.UpdatedAt,
 	).Scan(&client.ID)
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Update total_customers in users table using added_by (firebase_uid)
+	if client.AddedBy != "" {
+		err = IncrementUserTotalCustomers(client.AddedBy)
+		if err != nil {
+			log.Printf("Failed to increment total_customers for user %s: %v", client.AddedBy, err)
+			return fmt.Errorf("client created but failed to update user total_customers: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func UpdateClient(client *models.ClientModel) error {
