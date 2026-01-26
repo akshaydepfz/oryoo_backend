@@ -14,10 +14,10 @@ import (
 func ConnectDatabase() {
 
 	const (
-		host     = "ep-dry-feather-a1peu3z3.ap-southeast-1.pg.koyeb.app"
+		host     = "ep-shy-butterfly-agumkldu.c-2.eu-central-1.pg.koyeb.app"
 		port     = 5432
 		user     = "koyeb-adm"
-		password = "npg_PCYTbnK26NxB"
+		password = "npg_e6H0flOuEjJL"
 		dbname   = "koyebdb"
 	)
 
@@ -35,6 +35,49 @@ func ConnectDatabase() {
 
 	fmt.Println("Database connection established")
 
+}
+
+func CreateUsersTable() error {
+	query := `
+		CREATE TABLE IF NOT EXISTS users (
+			id SERIAL PRIMARY KEY,
+			firebase_uid TEXT NOT NULL UNIQUE,
+			phone TEXT NOT NULL,
+			name TEXT NOT NULL,
+			email TEXT NOT NULL,
+			business_name TEXT,
+			brand_image TEXT,
+			country TEXT,
+			state TEXT,
+			city TEXT,
+			address TEXT,
+			pincode TEXT,
+			total_customers INTEGER NOT NULL DEFAULT 0,
+			last_login TIMESTAMP,
+			last_active TIMESTAMP,
+			device_id TEXT,
+			device_model TEXT,
+			app_version TEXT,
+			is_premium BOOLEAN NOT NULL DEFAULT false,
+			plan_name TEXT,
+			plan_expiry TIMESTAMP,
+			rating REAL DEFAULT 5.0,
+			account_status TEXT NOT NULL DEFAULT 'active',
+			referral_code TEXT,
+			referred_by TEXT,
+			created_date TIMESTAMP DEFAULT NOW(),
+			updated_date TIMESTAMP DEFAULT NOW()
+		);
+	`
+
+	_, err := helper.DB.ExecContext(context.Background(), query)
+	if err != nil {
+		log.Printf("Error creating users table: %v", err)
+		return err
+	}
+
+	fmt.Println("Users table created successfully")
+	return nil
 }
 
 func CreateClientsTable() error {
