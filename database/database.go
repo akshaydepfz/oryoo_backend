@@ -14,10 +14,10 @@ import (
 func ConnectDatabase() {
 
 	const (
-		host     = "ep-shy-butterfly-agumkldu.c-2.eu-central-1.pg.koyeb.app"
+		host     = "ep-purple-union-aiia6zpe.c-4.us-east-1.pg.koyeb.app"
 		port     = 5432
 		user     = "koyeb-adm"
-		password = "npg_e6H0flOuEjJL"
+		password = "npg_j4fBv0uEsSkZ"
 		dbname   = "koyebdb"
 	)
 
