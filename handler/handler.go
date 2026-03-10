@@ -406,6 +406,58 @@ func GetOrdersByCreatedBy(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(orders)
 }
 
+func DeleteOrderHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract orderId from path: /orders/{orderId}
+	orderID := strings.TrimPrefix(r.URL.Path, "/orders/")
+	if orderID == "" || orderID == r.URL.Path {
+		http.Error(w, "Order ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Don't treat action paths as order IDs
+	if orderID == "create" || orderID == "update" || orderID == "by-created" {
+		http.Error(w, "Invalid order ID", http.StatusBadRequest)
+		return
+	}
+
+	// Fetch order to get client_id and total_amount before deleting (for client stats update)
+	clientID, totalAmount, err := helper.GetOrderClientAndAmount(orderID)
+	if err != nil {
+		http.Error(w, "Order not found", http.StatusNotFound)
+		return
+	}
+
+	// Delete order (order_items cascade automatically)
+	err = helper.DeleteOrder(orderID)
+	if err != nil {
+		if err.Error() == "order not found" {
+			http.Error(w, "Order not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Failed to delete order: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Decrement client stats
+	if clientID != "" {
+		_ = helper.UpdateClientStatsOnOrderDelete(clientID, totalAmount)
+	}
+
+	response := map[string]interface{}{
+		"success":  true,
+		"message":  "Order deleted successfully",
+		"order_id": orderID,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
 func CreatePayment(w http.ResponseWriter, r *http.Request) {
 	var req models.CreatePaymentRequest
 

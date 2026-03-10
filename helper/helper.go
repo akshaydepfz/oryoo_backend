@@ -530,6 +530,54 @@ func DeleteOrderItems(orderID string) error {
 	return err
 }
 
+// GetOrderClientAndAmount fetches client_id and total_amount for an order (used before delete to update client stats).
+func GetOrderClientAndAmount(orderID string) (clientID string, totalAmount float64, err error) {
+	query := `SELECT client_id, total_amount FROM orders WHERE id = $1`
+	err = DB.QueryRowContext(context.Background(), query, orderID).Scan(&clientID, &totalAmount)
+	return
+}
+
+// UpdateClientStatsOnOrderDelete decrements client stats when an order is deleted.
+func UpdateClientStatsOnOrderDelete(clientID string, orderAmount float64) error {
+	query := `
+		UPDATE clients SET
+			total_orders = GREATEST(0, total_orders - 1),
+			total_spent = GREATEST(0, total_spent - $1),
+			updated_at = NOW()
+		WHERE id = $2
+	`
+
+	_, err := DB.ExecContext(
+		context.Background(),
+		query,
+		orderAmount,
+		clientID,
+	)
+
+	return err
+}
+
+func DeleteOrder(orderID string) error {
+	query := `DELETE FROM orders WHERE id = $1`
+
+	result, err := DB.ExecContext(
+		context.Background(),
+		query,
+		orderID,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("order not found")
+	}
+
+	return nil
+}
+
 func UpdateOrder(req models.OrderModel) error {
 	query := `
 		UPDATE orders SET

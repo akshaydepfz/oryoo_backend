@@ -19,6 +19,7 @@ func main() {
 	http.HandleFunc("/orders/create", handler.CreateOrder)
 	http.HandleFunc("/orders/update", handler.UpdateOrder)
 	http.HandleFunc("/orders/by-created", handler.GetOrdersByCreatedBy)
+	http.HandleFunc("/orders/", handler.DeleteOrderHandler)
 	http.HandleFunc("/payments/create", handler.CreatePayment)
 	http.HandleFunc("/payments/by-created", handler.GetPaymentsByCreatedByHandler)
 	http.HandleFunc("/billing/transaction", handler.CreateBillingTransactionHandler)
