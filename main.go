@@ -10,7 +10,6 @@ import (
 func main() {
 
 	database.ConnectDatabase()
-	database.CreateProductsTable()
 	http.Handle("/users", http.HandlerFunc(handler.UserHandler))
 	http.HandleFunc("/auth/check-phone", handler.CheckPhoneHandler)
 	http.HandleFunc("/auth/register", handler.CreateUserHandler)
