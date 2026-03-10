@@ -592,6 +592,167 @@ func GetLatestVersionHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(version)
 }
 
+func ProductHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		CreateProduct(w, r)
+	} else if r.Method == http.MethodPut {
+		UpdateProduct(w, r)
+	} else if r.Method == http.MethodDelete {
+		// DELETE /products with body {"id": "..."}
+		DeleteProductByBody(w, r)
+	} else {
+		http.Error(w, "Invalid request method", http.StatusBadRequest)
+	}
+}
+
+func CreateProduct(w http.ResponseWriter, r *http.Request) {
+	var req models.CreateProductRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.Name == "" || req.AddedBy == "" {
+		http.Error(w, "name and added_by are required", http.StatusBadRequest)
+		return
+	}
+
+	now := time.Now()
+	product := models.ProductModel{
+		Name:        req.Name,
+		Description: req.Description,
+		Price:       req.Price,
+		SKU:         req.SKU,
+		AddedBy:     req.AddedBy,
+		CreatedAt:   &now,
+		UpdatedAt:   &now,
+	}
+
+	err := helper.InsertProduct(&product)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(product)
+}
+
+func UpdateProduct(w http.ResponseWriter, r *http.Request) {
+	var product models.ProductModel
+
+	if err := json.NewDecoder(r.Body).Decode(&product); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if product.ID == "" {
+		http.Error(w, "Product ID is required", http.StatusBadRequest)
+		return
+	}
+
+	err := helper.UpdateProduct(&product)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(product)
+}
+
+func GetProductsByCreatedBy(w http.ResponseWriter, r *http.Request) {
+	createdBy := r.URL.Query().Get("created_by")
+
+	if createdBy == "" {
+		http.Error(w, "created_by is required", http.StatusBadRequest)
+		return
+	}
+
+	products, err := helper.GetProductsByCreatedBy(createdBy)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(products)
+}
+
+func DeleteProductByBody(w http.ResponseWriter, r *http.Request) {
+	var req models.DeleteProductRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ID == "" {
+		http.Error(w, "Product ID is required in body: {\"id\": \"...\"}", http.StatusBadRequest)
+		return
+	}
+
+	err := helper.DeleteProduct(req.ID)
+	if err != nil {
+		if err.Error() == "product not found" {
+			http.Error(w, "Product not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Product deleted successfully",
+		"id":      req.ID,
+	})
+}
+
+func DeleteProductHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Try path param first: /products/{id}
+	productID := strings.TrimPrefix(r.URL.Path, "/products/")
+	if productID == "" || productID == r.URL.Path {
+		productID = ""
+	}
+
+	// Don't treat action paths as product IDs
+	if productID == "created-by" {
+		productID = ""
+	}
+
+	// If no path param, try body {"id": "..."}
+	if productID == "" {
+		var req models.DeleteProductRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil && req.ID != "" {
+			productID = req.ID
+		}
+	}
+
+	if productID == "" {
+		http.Error(w, "Product ID is required (path /products/{id} or body {\"id\": \"...\"})", http.StatusBadRequest)
+		return
+	}
+
+	err := helper.DeleteProduct(productID)
+	if err != nil {
+		if err.Error() == "product not found" {
+			http.Error(w, "Product not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Product deleted successfully",
+		"id":      productID,
+	})
+}
+
 func CreateBillingTransactionHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

@@ -10,6 +10,7 @@ import (
 func main() {
 
 	database.ConnectDatabase()
+	database.CreateProductsTable()
 	http.Handle("/users", http.HandlerFunc(handler.UserHandler))
 	http.HandleFunc("/auth/check-phone", handler.CheckPhoneHandler)
 	http.HandleFunc("/auth/register", handler.CreateUserHandler)
@@ -25,6 +26,11 @@ func main() {
 	http.HandleFunc("/payments/", handler.DeletePaymentHandler)
 	http.HandleFunc("/billing/transaction", handler.CreateBillingTransactionHandler)
 	http.HandleFunc("/app/latest-version", handler.GetLatestVersionHandler)
+
+	// Products - register specific routes before generic
+	http.HandleFunc("/products/created-by", handler.GetProductsByCreatedBy)
+	http.HandleFunc("/products/", handler.DeleteProductHandler)
+	http.HandleFunc("/products", handler.ProductHandler)
 
 	// mailService := initMailService()
 

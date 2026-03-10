@@ -902,6 +902,115 @@ func InsertBillingTransaction(req models.CreateBillingTransactionRequest) (strin
 	return transactionID, nil
 }
 
+func InsertProduct(product *models.ProductModel) error {
+	query := `
+		INSERT INTO products (
+			name, description, price, sku, added_by,
+			created_at, updated_at
+		)
+		VALUES (
+			$1, $2, $3, $4, $5,
+			$6, $7
+		)
+		RETURNING id
+	`
+
+	err := DB.QueryRow(
+		query,
+		product.Name,
+		product.Description,
+		product.Price,
+		product.SKU,
+		product.AddedBy,
+		product.CreatedAt,
+		product.UpdatedAt,
+	).Scan(&product.ID)
+
+	return err
+}
+
+func UpdateProduct(product *models.ProductModel) error {
+	now := time.Now()
+	product.UpdatedAt = &now
+
+	query := `
+		UPDATE products SET
+			name = $1,
+			description = $2,
+			price = $3,
+			sku = $4,
+			updated_at = $5
+		WHERE id = $6
+	`
+
+	_, err := DB.ExecContext(
+		context.Background(),
+		query,
+		product.Name,
+		product.Description,
+		product.Price,
+		product.SKU,
+		product.UpdatedAt,
+		product.ID,
+	)
+	return err
+}
+
+func DeleteProduct(productID string) error {
+	query := `DELETE FROM products WHERE id = $1`
+
+	result, err := DB.ExecContext(
+		context.Background(),
+		query,
+		productID,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("product not found")
+	}
+
+	return nil
+}
+
+func GetProductsByCreatedBy(createdBy string) ([]models.ProductModel, error) {
+	rows, err := DB.Query(`
+		SELECT id, name, description, price, sku, added_by, created_at, updated_at
+		FROM products
+		WHERE added_by = $1
+		ORDER BY created_at DESC
+	`, createdBy)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var products []models.ProductModel
+	for rows.Next() {
+		var p models.ProductModel
+		err := rows.Scan(
+			&p.ID,
+			&p.Name,
+			&p.Description,
+			&p.Price,
+			&p.SKU,
+			&p.AddedBy,
+			&p.CreatedAt,
+			&p.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		products = append(products, p)
+	}
+
+	return products, nil
+}
+
 func UpdateUserPlanData(firebaseUID string, planName string, planExpiry time.Time) error {
 	query := `
 		UPDATE users SET

@@ -252,6 +252,30 @@ func AddtotalCustomersInUsersTable() error {
 	return nil
 }
 
+func CreateProductsTable() error {
+	query := `
+		CREATE TABLE IF NOT EXISTS products (
+			id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+			name TEXT NOT NULL,
+			description TEXT NOT NULL,
+			price DOUBLE PRECISION NOT NULL DEFAULT 0,
+			sku TEXT,
+			added_by TEXT NOT NULL,
+			created_at TIMESTAMP DEFAULT NOW(),
+			updated_at TIMESTAMP DEFAULT NOW()
+		);
+	`
+
+	_, err := helper.DB.ExecContext(context.Background(), query)
+	if err != nil {
+		log.Printf("Error creating products table: %v", err)
+		return err
+	}
+
+	fmt.Println("Products table created successfully")
+	return nil
+}
+
 func CreateBillingTransactionsTable() error {
 	query := `
 		CREATE TABLE IF NOT EXISTS billing_transactions (

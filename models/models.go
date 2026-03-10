@@ -175,6 +175,29 @@ type BillingTransaction struct {
 	CreatedAt         time.Time `json:"created_at" db:"created_at"`
 }
 
+type ProductModel struct {
+	ID          string     `json:"id" db:"id"`
+	Name        string     `json:"name" db:"name"`
+	Description string     `json:"description" db:"description"`
+	Price       float64    `json:"price" db:"price"`
+	SKU         *string    `json:"sku,omitempty" db:"sku"`
+	AddedBy     string     `json:"added_by" db:"added_by"`
+	CreatedAt   *time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt   *time.Time `json:"updated_at" db:"updated_at"`
+}
+
+type CreateProductRequest struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Price       float64  `json:"price"`
+	SKU         *string  `json:"sku,omitempty"`
+	AddedBy     string   `json:"added_by"`
+}
+
+type DeleteProductRequest struct {
+	ID string `json:"id"`
+}
+
 type CreateBillingTransactionRequest struct {
 	UserID            string    `json:"user_id"` // firebase_uid
 	PlanID            string    `json:"plan_id"`
