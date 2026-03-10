@@ -835,6 +835,27 @@ func GetPaymentsByCreatedBy(createdBy string) ([]models.PaymentModel, error) {
 	return payments, nil
 }
 
+func DeletePayment(paymentID string) error {
+	query := `DELETE FROM payments WHERE id = $1`
+
+	result, err := DB.ExecContext(
+		context.Background(),
+		query,
+		paymentID,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("payment not found")
+	}
+
+	return nil
+}
+
 func InsertBillingTransaction(req models.CreateBillingTransactionRequest) (string, error) {
 	transactionID := uuid.New().String()
 

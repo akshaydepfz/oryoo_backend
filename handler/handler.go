@@ -537,6 +537,45 @@ func GetPaymentsByCreatedByHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+func DeletePaymentHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract paymentId from path: /payments/{paymentId}
+	paymentID := strings.TrimPrefix(r.URL.Path, "/payments/")
+	if paymentID == "" || paymentID == r.URL.Path {
+		http.Error(w, "Payment ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Don't treat action paths as payment IDs
+	if paymentID == "create" || paymentID == "by-created" {
+		http.Error(w, "Invalid payment ID", http.StatusBadRequest)
+		return
+	}
+
+	err := helper.DeletePayment(paymentID)
+	if err != nil {
+		if err.Error() == "payment not found" {
+			http.Error(w, "Payment not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Failed to delete payment: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]interface{}{
+		"success":     true,
+		"message":     "Payment deleted successfully",
+		"payment_id":  paymentID,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
 func GetLatestVersionHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
