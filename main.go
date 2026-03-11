@@ -26,6 +26,14 @@ func main() {
 	http.HandleFunc("/billing/transaction", handler.CreateBillingTransactionHandler)
 	http.HandleFunc("/app/latest-version", handler.GetLatestVersionHandler)
 
+	// Admin - list endpoints
+	http.HandleFunc("/admin/customers", handler.AdminGetCustomers)
+	http.HandleFunc("/admin/clients", handler.AdminGetClients)
+	http.HandleFunc("/admin/payments", handler.AdminGetPayments)
+	http.HandleFunc("/admin/orders", handler.AdminGetOrders)
+	http.HandleFunc("/admin/products", handler.AdminGetProducts)
+	http.HandleFunc("/admin/billing-transactions", handler.AdminGetBillingTransactions)
+
 	// Products - register specific routes before generic
 	http.HandleFunc("/products/created-by", handler.GetProductsByCreatedBy)
 	http.HandleFunc("/products/", handler.DeleteProductHandler)

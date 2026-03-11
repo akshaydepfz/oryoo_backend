@@ -612,6 +612,67 @@ func MarkOrderPaid(orderNumber string) error {
 	return err
 }
 
+func GetAllOrders() ([]models.OrderModel, error) {
+	query := `
+		SELECT 
+			id,
+			order_number,
+			client_id,
+			client_name,
+			client_avatar,
+			total_amount,
+			status,
+			payment_status,
+			created_at,
+			updated_at,
+			delivery_date,
+			delivery_address,
+			notes,
+			added_by,
+			created_by
+		FROM orders
+		ORDER BY created_at DESC;
+	`
+
+	rows, err := DB.QueryContext(context.Background(), query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var orders []models.OrderModel
+	for rows.Next() {
+		var o models.OrderModel
+		err := rows.Scan(
+			&o.ID,
+			&o.OrderNumber,
+			&o.ClientID,
+			&o.ClientName,
+			&o.ClientAvatar,
+			&o.TotalAmount,
+			&o.Status,
+			&o.PaymentStatus,
+			&o.CreatedAt,
+			&o.UpdatedAt,
+			&o.DeliveryDate,
+			&o.DeliveryAddress,
+			&o.Notes,
+			&o.AddedBy,
+			&o.CreatedBy,
+		)
+		if err != nil {
+			return nil, err
+		}
+		items, err := FetchOrderItems(o.ID)
+		if err != nil {
+			return nil, err
+		}
+		o.Items = items
+		orders = append(orders, o)
+	}
+	return orders, nil
+}
+
 func FetchOrdersByCreatedBy(createdBy string) ([]models.OrderModel, error) {
 	query := `
 		SELECT 
@@ -775,6 +836,60 @@ func InsertPayment(paymentID string, req models.CreatePaymentRequest) error {
 	return err
 }
 
+func GetAllPayments() ([]models.PaymentModel, error) {
+	rows, err := DB.Query(`
+		SELECT 
+			id,
+			client_id,
+			client_name,
+			client_avatar,
+			amount,
+			date,
+			status,
+			order_id,
+			payment_method,
+			paid_amount,
+			notes,
+			created_by,
+			added_by,
+			created_at,
+			updated_at
+		FROM payments
+		ORDER BY created_at DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var payments []models.PaymentModel
+	for rows.Next() {
+		var p models.PaymentModel
+		err := rows.Scan(
+			&p.ID,
+			&p.ClientID,
+			&p.ClientName,
+			&p.ClientAvatar,
+			&p.Amount,
+			&p.Date,
+			&p.Status,
+			&p.OrderID,
+			&p.PaymentMethod,
+			&p.PaidAmount,
+			&p.Notes,
+			&p.CreatedBy,
+			&p.AddedBy,
+			&p.CreatedAt,
+			&p.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		payments = append(payments, p)
+	}
+	return payments, nil
+}
+
 func GetPaymentsByCreatedBy(createdBy string) ([]models.PaymentModel, error) {
 	rows, err := DB.Query(`
 		SELECT 
@@ -902,6 +1017,54 @@ func InsertBillingTransaction(req models.CreateBillingTransactionRequest) (strin
 	return transactionID, nil
 }
 
+func GetAllBillingTransactions() ([]models.BillingTransaction, error) {
+	rows, err := DB.Query(`
+		SELECT 
+			id,
+			user_id,
+			plan_id,
+			plan_name,
+			razorpay_order_id,
+			razorpay_payment_id,
+			razorpay_signature,
+			amount,
+			currency,
+			status,
+			plan_expiry,
+			created_at
+		FROM billing_transactions
+		ORDER BY created_at DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var transactions []models.BillingTransaction
+	for rows.Next() {
+		var t models.BillingTransaction
+		err := rows.Scan(
+			&t.ID,
+			&t.UserID,
+			&t.PlanID,
+			&t.PlanName,
+			&t.RazorpayOrderID,
+			&t.RazorpayPaymentID,
+			&t.RazorpaySignature,
+			&t.Amount,
+			&t.Currency,
+			&t.Status,
+			&t.PlanExpiry,
+			&t.CreatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		transactions = append(transactions, t)
+	}
+	return transactions, nil
+}
+
 func InsertProduct(product *models.ProductModel) error {
 	query := `
 		INSERT INTO products (
@@ -975,6 +1138,38 @@ func DeleteProduct(productID string) error {
 	}
 
 	return nil
+}
+
+func GetAllProducts() ([]models.ProductModel, error) {
+	rows, err := DB.Query(`
+		SELECT id, name, description, price, sku, added_by, created_at, updated_at
+		FROM products
+		ORDER BY created_at DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var products []models.ProductModel
+	for rows.Next() {
+		var p models.ProductModel
+		err := rows.Scan(
+			&p.ID,
+			&p.Name,
+			&p.Description,
+			&p.Price,
+			&p.SKU,
+			&p.AddedBy,
+			&p.CreatedAt,
+			&p.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		products = append(products, p)
+	}
+	return products, nil
 }
 
 func GetProductsByCreatedBy(createdBy string) ([]models.ProductModel, error) {
