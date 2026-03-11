@@ -52,7 +52,23 @@ func main() {
 
 	// log.Println("Welcome email sent successfully")
 
-	http.ListenAndServe(":8080", nil)
+	http.ListenAndServe(":8080", enableCors(http.DefaultServeMux))
+}
+
+func enableCors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin == "https://oryoo-app.web.app" || origin == "https://oryoo.in" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+		}
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // func initMailService() *mailer.MailService {
