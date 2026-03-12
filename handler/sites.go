@@ -20,6 +20,14 @@ import (
 	"oryoo.com/models"
 )
 
+const adminSecret = "8f3k29df0sdf89sdf98sd7f98sd7f9sd87f"
+
+// isAdminAuth returns true if the request has the admin Bearer token.
+func isAdminAuth(r *http.Request) bool {
+	auth := r.Header.Get("Authorization")
+	return auth == "Bearer "+adminSecret
+}
+
 // getAuthenticatedUser extracts firebase_uid from Authorization: Bearer <firebase_uid> or X-Firebase-UID header,
 // looks up the user, and returns it. Returns error if not authenticated.
 func getAuthenticatedUser(r *http.Request) (models.User, error) {
@@ -38,6 +46,19 @@ func getAuthenticatedUser(r *http.Request) (models.User, error) {
 		return models.User{}, fmt.Errorf("user not found")
 	}
 	return user, nil
+}
+
+// getAuthenticatedUserOrAdmin returns (user, isAdmin, err). If admin Bearer token is used, isAdmin=true and user is zero.
+// If Firebase UID is used, isAdmin=false and user is set. Otherwise returns error.
+func getAuthenticatedUserOrAdmin(r *http.Request) (models.User, bool, error) {
+	if isAdminAuth(r) {
+		return models.User{}, true, nil
+	}
+	user, err := getAuthenticatedUser(r)
+	if err != nil {
+		return models.User{}, false, err
+	}
+	return user, false, nil
 }
 
 const (
@@ -270,6 +291,10 @@ func SitesAdminUploadHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if _, _, err := getAuthenticatedUserOrAdmin(r); err != nil {
+		http.Error(w, "authentication required: provide admin Bearer token or Authorization: Bearer <firebase_uid>", http.StatusUnauthorized)
+		return
+	}
 	err := r.ParseMultipartForm(20 << 20)
 	if err != nil {
 		http.Error(w, "Invalid form data", http.StatusBadRequest)
@@ -310,6 +335,11 @@ func SitesAdminUploadHandler(w http.ResponseWriter, r *http.Request) {
 // SitesAdminShopsHandler POST /sites/admin/shops, GET /sites/admin/shops
 func SitesAdminShopsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
+		user, isAdmin, err := getAuthenticatedUserOrAdmin(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
 		var req models.CreateShopRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Invalid JSON", http.StatusBadRequest)
@@ -322,6 +352,12 @@ func SitesAdminShopsHandler(w http.ResponseWriter, r *http.Request) {
 		if req.Name == "" || req.Subdomain == "" {
 			http.Error(w, "name and subdomain are required", http.StatusBadRequest)
 			return
+		}
+		if !isAdmin {
+			if req.OwnerID != int(user.ID) {
+				http.Error(w, "owner_id must match your user id", http.StatusForbidden)
+				return
+			}
 		}
 		if err := helper.ValidateOwnerID(req.OwnerID); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -337,6 +373,16 @@ func SitesAdminShopsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodGet {
+		if isAdminAuth(r) {
+			shops, err := helper.GetAllShops()
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(shops)
+			return
+		}
 		firebaseUID := r.Header.Get("X-Firebase-UID")
 		if firebaseUID == "" {
 			auth := r.Header.Get("Authorization")
@@ -345,7 +391,7 @@ func SitesAdminShopsHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if firebaseUID == "" {
-			http.Error(w, "authentication required: provide X-Firebase-UID header or Authorization: Bearer <firebase_uid>", http.StatusUnauthorized)
+			http.Error(w, "authentication required: provide X-Firebase-UID header or Authorization: Bearer <firebase_uid> or admin Bearer token", http.StatusUnauthorized)
 			return
 		}
 		userID, err := helper.GetUserIDByFirebaseUID(firebaseUID)
@@ -371,7 +417,7 @@ func SitesAdminShopsByIDHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	user, err := getAuthenticatedUser(r)
+	user, isAdmin, err := getAuthenticatedUserOrAdmin(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
@@ -381,9 +427,11 @@ func SitesAdminShopsByIDHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid shop ID", http.StatusBadRequest)
 		return
 	}
-	if err := helper.VerifyShopOwnership(id, int(user.ID)); err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
-		return
+	if !isAdmin {
+		if err := helper.VerifyShopOwnership(id, int(user.ID)); err != nil {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 	}
 	var req struct {
 		Name         string  `json:"name"`
@@ -413,7 +461,7 @@ func SitesAdminProductsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	user, err := getAuthenticatedUser(r)
+	user, isAdmin, err := getAuthenticatedUserOrAdmin(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
@@ -427,9 +475,11 @@ func SitesAdminProductsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "shop_id and name are required", http.StatusBadRequest)
 		return
 	}
-	if err := helper.VerifyShopOwnership(req.ShopID, int(user.ID)); err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
-		return
+	if !isAdmin {
+		if err := helper.VerifyShopOwnership(req.ShopID, int(user.ID)); err != nil {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 	}
 	product, err := helper.InsertSiteProduct(req)
 	if err != nil {
@@ -442,7 +492,7 @@ func SitesAdminProductsHandler(w http.ResponseWriter, r *http.Request) {
 
 // SitesAdminProductsByIDHandler PUT /sites/admin/products/{id}?shop_id=, DELETE /sites/admin/products/{id}?shop_id=
 func SitesAdminProductsByIDHandler(w http.ResponseWriter, r *http.Request) {
-	user, err := getAuthenticatedUser(r)
+	user, isAdmin, err := getAuthenticatedUserOrAdmin(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
@@ -457,9 +507,11 @@ func SitesAdminProductsByIDHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "shop_id is required", http.StatusBadRequest)
 		return
 	}
-	if err := helper.VerifyShopOwnership(shopID, int(user.ID)); err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
-		return
+	if !isAdmin {
+		if err := helper.VerifyShopOwnership(shopID, int(user.ID)); err != nil {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 	}
 	if r.Method == http.MethodPut {
 		var req models.UpdateSiteProductRequest
@@ -498,7 +550,7 @@ func SitesAdminCategoriesHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	user, err := getAuthenticatedUser(r)
+	user, isAdmin, err := getAuthenticatedUserOrAdmin(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
@@ -512,9 +564,11 @@ func SitesAdminCategoriesHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "shop_id, name and slug are required", http.StatusBadRequest)
 		return
 	}
-	if err := helper.VerifyShopOwnership(req.ShopID, int(user.ID)); err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
-		return
+	if !isAdmin {
+		if err := helper.VerifyShopOwnership(req.ShopID, int(user.ID)); err != nil {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 	}
 	category, err := helper.InsertSiteCategory(req)
 	if err != nil {
@@ -527,7 +581,7 @@ func SitesAdminCategoriesHandler(w http.ResponseWriter, r *http.Request) {
 
 // SitesAdminCategoriesByIDHandler PUT /sites/admin/categories/{id}?shop_id=, DELETE /sites/admin/categories/{id}?shop_id=
 func SitesAdminCategoriesByIDHandler(w http.ResponseWriter, r *http.Request) {
-	user, err := getAuthenticatedUser(r)
+	user, isAdmin, err := getAuthenticatedUserOrAdmin(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
@@ -542,9 +596,11 @@ func SitesAdminCategoriesByIDHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "shop_id is required", http.StatusBadRequest)
 		return
 	}
-	if err := helper.VerifyShopOwnership(shopID, int(user.ID)); err != nil {
-		http.Error(w, err.Error(), http.StatusForbidden)
-		return
+	if !isAdmin {
+		if err := helper.VerifyShopOwnership(shopID, int(user.ID)); err != nil {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
 	}
 	if r.Method == http.MethodPut {
 		var req models.UpdateCategoryRequest
