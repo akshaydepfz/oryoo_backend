@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"strings"
 
 	"oryoo.com/database"
 	"oryoo.com/handler"
@@ -80,15 +81,23 @@ func main() {
 func enableCors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		if origin == "https://oryoo-app.web.app" || origin == "https://oryoo.in" {
+
+		// Allow subdomains (*.oryoo.in), main domain, and deployed frontend
+		if origin != "" &&
+			(strings.HasSuffix(origin, ".oryoo.in") ||
+				origin == "https://oryoo.in" ||
+				origin == "https://oryoo-app.web.app") {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 		}
+
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		if r.Method == "OPTIONS" {
+
+		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
+
 		next.ServeHTTP(w, r)
 	})
 }
