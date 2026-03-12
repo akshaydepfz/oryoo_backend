@@ -337,6 +337,7 @@ func CreateShopsTable() error {
 			name TEXT NOT NULL,
 			subdomain TEXT UNIQUE,
 			custom_domain TEXT,
+			owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
 			status TEXT DEFAULT 'active',
 			created_at TIMESTAMP DEFAULT NOW()
 		);
@@ -344,6 +345,18 @@ func CreateShopsTable() error {
 	_, err := helper.DB.ExecContext(context.Background(), query)
 	if err != nil {
 		log.Printf("Error creating shops table: %v", err)
+		return err
+	}
+	return nil
+}
+
+// AddOwnerIDToShops adds owner_id column to existing shops table (migration for existing deployments)
+func AddOwnerIDToShops() error {
+	_, err := helper.DB.ExecContext(context.Background(), `
+		ALTER TABLE shops ADD COLUMN IF NOT EXISTS owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+	`)
+	if err != nil {
+		log.Printf("Error adding owner_id to shops: %v", err)
 		return err
 	}
 	return nil
@@ -521,6 +534,7 @@ func CreateSitesIndexes() error {
 // CreateSitesTables creates all Oryoo Sites tables in dependency order (call after ConnectDatabase).
 func CreateSitesTables() {
 	_ = CreateShopsTable()
+	_ = AddOwnerIDToShops() // Migration: add owner_id to existing shops tables
 	_ = CreateSiteConfigsTable()
 	_ = CreateCategoriesTable()
 	_ = CreateProductsSitesTable()

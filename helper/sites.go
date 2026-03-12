@@ -26,10 +26,14 @@ func GetShopByDomain(domain string) (*models.Shop, error) {
 		if subdomain == "" || subdomain == "oryoo" {
 			return nil, fmt.Errorf("invalid subdomain")
 		}
-		query := `SELECT id, name, subdomain, custom_domain, created_at, status FROM shops WHERE subdomain = $1 AND status = 'active'`
+		query := `SELECT id, name, subdomain, custom_domain, owner_id, created_at, status FROM shops WHERE subdomain = $1 AND status = 'active'`
+		var ownerID *int
 		err := DB.QueryRowContext(context.Background(), query, subdomain).Scan(
-			&shop.ID, &shop.Name, &shop.Subdomain, &shop.CustomDomain, &shop.CreatedAt, &shop.Status,
+			&shop.ID, &shop.Name, &shop.Subdomain, &shop.CustomDomain, &ownerID, &shop.CreatedAt, &shop.Status,
 		)
+		if err == nil && ownerID != nil {
+			shop.OwnerID = *ownerID
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -37,38 +41,46 @@ func GetShopByDomain(domain string) (*models.Shop, error) {
 	}
 
 	// Custom domain: goldpalace.com
-	query := `SELECT id, name, subdomain, custom_domain, created_at, status FROM shops WHERE LOWER(custom_domain) = $1 AND status = 'active'`
+	query := `SELECT id, name, subdomain, custom_domain, owner_id, created_at, status FROM shops WHERE LOWER(custom_domain) = $1 AND status = 'active'`
+	var ownerID *int
 	err := DB.QueryRowContext(context.Background(), query, domain).Scan(
-		&shop.ID, &shop.Name, &shop.Subdomain, &shop.CustomDomain, &shop.CreatedAt, &shop.Status,
+		&shop.ID, &shop.Name, &shop.Subdomain, &shop.CustomDomain, &ownerID, &shop.CreatedAt, &shop.Status,
 	)
 	if err != nil {
 		return nil, err
 	}
-	return &shop, nil
-}
-
-// InsertShop creates a new shop
-func InsertShop(req models.CreateShopRequest) (*models.Shop, error) {
-	id := uuid.New().String()
-	query := `
-		INSERT INTO shops (id, name, subdomain, custom_domain, status)
-		VALUES ($1, $2, $3, $4, 'active')
-		RETURNING id, name, subdomain, custom_domain, created_at, status
-	`
-	var shop models.Shop
-	err := DB.QueryRowContext(context.Background(), query,
-		id, req.Name, req.Subdomain, req.CustomDomain,
-	).Scan(&shop.ID, &shop.Name, &shop.Subdomain, &shop.CustomDomain, &shop.CreatedAt, &shop.Status)
-	if err != nil {
-		return nil, err
+	if ownerID != nil {
+		shop.OwnerID = *ownerID
 	}
 	return &shop, nil
 }
 
-// GetAllShops returns all shops
+// InsertShop creates a new shop with the given ownerID (user id from users table)
+func InsertShop(req models.CreateShopRequest, ownerID int) (*models.Shop, error) {
+	id := uuid.New().String()
+	query := `
+		INSERT INTO shops (id, name, subdomain, custom_domain, owner_id, status)
+		VALUES ($1, $2, $3, $4, $5, 'active')
+		RETURNING id, name, subdomain, custom_domain, owner_id, created_at, status
+	`
+	var shop models.Shop
+	var ownerIDOut *int
+	err := DB.QueryRowContext(context.Background(), query,
+		id, req.Name, req.Subdomain, req.CustomDomain, ownerID,
+	).Scan(&shop.ID, &shop.Name, &shop.Subdomain, &shop.CustomDomain, &ownerIDOut, &shop.CreatedAt, &shop.Status)
+	if err != nil {
+		return nil, err
+	}
+	if ownerIDOut != nil {
+		shop.OwnerID = *ownerIDOut
+	}
+	return &shop, nil
+}
+
+// GetAllShops returns all shops (for backward compatibility; prefer GetShopsByOwnerID for admin)
 func GetAllShops() ([]models.Shop, error) {
 	rows, err := DB.QueryContext(context.Background(),
-		`SELECT id, name, subdomain, custom_domain, created_at, status FROM shops ORDER BY created_at DESC`)
+		`SELECT id, name, subdomain, custom_domain, owner_id, created_at, status FROM shops ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -76,38 +88,84 @@ func GetAllShops() ([]models.Shop, error) {
 	var shops []models.Shop
 	for rows.Next() {
 		var s models.Shop
-		if err := rows.Scan(&s.ID, &s.Name, &s.Subdomain, &s.CustomDomain, &s.CreatedAt, &s.Status); err != nil {
+		var ownerID *int
+		if err := rows.Scan(&s.ID, &s.Name, &s.Subdomain, &s.CustomDomain, &ownerID, &s.CreatedAt, &s.Status); err != nil {
 			return nil, err
+		}
+		if ownerID != nil {
+			s.OwnerID = *ownerID
 		}
 		shops = append(shops, s)
 	}
 	return shops, nil
 }
 
+// GetShopsByOwnerID returns shops owned by the given user (owner_id = users.id)
+func GetShopsByOwnerID(ownerID int) ([]models.Shop, error) {
+	rows, err := DB.QueryContext(context.Background(),
+		`SELECT id, name, subdomain, custom_domain, owner_id, created_at, status FROM shops WHERE owner_id = $1 ORDER BY created_at DESC`, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var shops []models.Shop
+	for rows.Next() {
+		var s models.Shop
+		var ownerIDOut *int
+		if err := rows.Scan(&s.ID, &s.Name, &s.Subdomain, &s.CustomDomain, &ownerIDOut, &s.CreatedAt, &s.Status); err != nil {
+			return nil, err
+		}
+		if ownerIDOut != nil {
+			s.OwnerID = *ownerIDOut
+		}
+		shops = append(shops, s)
+	}
+	return shops, nil
+}
+
+// VerifyShopOwnership returns nil if the shop belongs to the given owner (user id), else error
+func VerifyShopOwnership(shopID string, ownerID int) error {
+	var dummy int
+	err := DB.QueryRowContext(context.Background(),
+		`SELECT 1 FROM shops WHERE id = $1 AND owner_id = $2`, shopID, ownerID).Scan(&dummy)
+	if err != nil {
+		return fmt.Errorf("shop not found or access denied")
+	}
+	return nil
+}
+
 // GetShopByID returns a shop by ID
 func GetShopByID(id string) (*models.Shop, error) {
 	var shop models.Shop
+	var ownerID *int
 	err := DB.QueryRowContext(context.Background(),
-		`SELECT id, name, subdomain, custom_domain, created_at, status FROM shops WHERE id = $1`, id,
-	).Scan(&shop.ID, &shop.Name, &shop.Subdomain, &shop.CustomDomain, &shop.CreatedAt, &shop.Status)
+		`SELECT id, name, subdomain, custom_domain, owner_id, created_at, status FROM shops WHERE id = $1`, id,
+	).Scan(&shop.ID, &shop.Name, &shop.Subdomain, &shop.CustomDomain, &ownerID, &shop.CreatedAt, &shop.Status)
 	if err != nil {
 		return nil, err
+	}
+	if ownerID != nil {
+		shop.OwnerID = *ownerID
 	}
 	return &shop, nil
 }
 
-// UpdateShop updates a shop
+// UpdateShop updates a shop (caller must verify ownership before calling)
 func UpdateShop(id string, name, subdomain string, customDomain *string) (*models.Shop, error) {
 	query := `
 		UPDATE shops SET name = $1, subdomain = $2, custom_domain = $3 WHERE id = $4
-		RETURNING id, name, subdomain, custom_domain, created_at, status
+		RETURNING id, name, subdomain, custom_domain, owner_id, created_at, status
 	`
 	var shop models.Shop
+	var ownerID *int
 	err := DB.QueryRowContext(context.Background(), query, name, subdomain, customDomain, id).Scan(
-		&shop.ID, &shop.Name, &shop.Subdomain, &shop.CustomDomain, &shop.CreatedAt, &shop.Status,
+		&shop.ID, &shop.Name, &shop.Subdomain, &shop.CustomDomain, &ownerID, &shop.CreatedAt, &shop.Status,
 	)
 	if err != nil {
 		return nil, err
+	}
+	if ownerID != nil {
+		shop.OwnerID = *ownerID
 	}
 	return &shop, nil
 }

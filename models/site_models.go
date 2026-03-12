@@ -8,12 +8,13 @@ import (
 
 // Shop model for Oryoo Sites
 type Shop struct {
-	ID           string     `json:"id"`
-	Name         string     `json:"name"`
-	Subdomain    string     `json:"subdomain"`
-	CustomDomain *string    `json:"custom_domain,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
-	Status       string     `json:"status"`
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	Subdomain    string    `json:"subdomain"`
+	CustomDomain *string   `json:"custom_domain,omitempty"`
+	OwnerID      int       `json:"owner_id"`
+	Status       string    `json:"status"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // SiteConfig model
