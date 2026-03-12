@@ -94,7 +94,7 @@ func SitesProductsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(products)
 }
 
-// SitesProductByIDHandler GET /sites/products/{id}
+// SitesProductByIDHandler GET /sites/products/{id}?shop_id=
 func SitesProductByIDHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -105,7 +105,12 @@ func SitesProductByIDHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "product id is required", http.StatusBadRequest)
 		return
 	}
-	product, err := helper.GetSiteProductByID(id)
+	shopID := r.URL.Query().Get("shop_id")
+	if shopID == "" {
+		http.Error(w, "shop_id is required", http.StatusBadRequest)
+		return
+	}
+	product, err := helper.GetSiteProductByID(id, shopID)
 	if err != nil {
 		http.Error(w, "Product not found", http.StatusNotFound)
 		return
@@ -348,11 +353,16 @@ func SitesAdminProductsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(product)
 }
 
-// SitesAdminProductsByIDHandler PUT /sites/admin/products/{id}, DELETE /sites/admin/products/{id}
+// SitesAdminProductsByIDHandler PUT /sites/admin/products/{id}?shop_id=, DELETE /sites/admin/products/{id}?shop_id=
 func SitesAdminProductsByIDHandler(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/sites/admin/products/")
 	if id == "" || !isValidUUID(id) {
 		http.Error(w, "Invalid product ID", http.StatusBadRequest)
+		return
+	}
+	shopID := r.URL.Query().Get("shop_id")
+	if shopID == "" {
+		http.Error(w, "shop_id is required", http.StatusBadRequest)
 		return
 	}
 	if r.Method == http.MethodPut {
@@ -361,7 +371,7 @@ func SitesAdminProductsByIDHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid JSON", http.StatusBadRequest)
 			return
 		}
-		product, err := helper.UpdateSiteProduct(id, req)
+		product, err := helper.UpdateSiteProduct(id, shopID, req)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -371,7 +381,7 @@ func SitesAdminProductsByIDHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodDelete {
-		if err := helper.DeleteSiteProduct(id); err != nil {
+		if err := helper.DeleteSiteProduct(id, shopID); err != nil {
 			if err.Error() == "product not found" {
 				http.Error(w, "Product not found", http.StatusNotFound)
 				return
@@ -410,11 +420,16 @@ func SitesAdminCategoriesHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(category)
 }
 
-// SitesAdminCategoriesByIDHandler PUT /sites/admin/categories/{id}, DELETE /sites/admin/categories/{id}
+// SitesAdminCategoriesByIDHandler PUT /sites/admin/categories/{id}?shop_id=, DELETE /sites/admin/categories/{id}?shop_id=
 func SitesAdminCategoriesByIDHandler(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/sites/admin/categories/")
 	if id == "" || !isValidUUID(id) {
 		http.Error(w, "Invalid category ID", http.StatusBadRequest)
+		return
+	}
+	shopID := r.URL.Query().Get("shop_id")
+	if shopID == "" {
+		http.Error(w, "shop_id is required", http.StatusBadRequest)
 		return
 	}
 	if r.Method == http.MethodPut {
@@ -427,7 +442,7 @@ func SitesAdminCategoriesByIDHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "name and slug are required", http.StatusBadRequest)
 			return
 		}
-		category, err := helper.UpdateSiteCategory(id, req)
+		category, err := helper.UpdateSiteCategory(id, shopID, req)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -437,7 +452,7 @@ func SitesAdminCategoriesByIDHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodDelete {
-		if err := helper.DeleteSiteCategory(id); err != nil {
+		if err := helper.DeleteSiteCategory(id, shopID); err != nil {
 			if err.Error() == "category not found" {
 				http.Error(w, "Category not found", http.StatusNotFound)
 				return

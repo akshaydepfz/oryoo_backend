@@ -202,12 +202,12 @@ func InsertSiteCategory(req models.CreateCategoryRequest) (*models.SiteCategory,
 	return &c, nil
 }
 
-// UpdateSiteCategory updates a category
-func UpdateSiteCategory(id string, req models.UpdateCategoryRequest) (*models.SiteCategory, error) {
+// UpdateSiteCategory updates a category (scoped by shop_id)
+func UpdateSiteCategory(id, shopID string, req models.UpdateCategoryRequest) (*models.SiteCategory, error) {
 	query := `UPDATE categories SET name = $1, slug = $2, image_url = $3, updated_at = NOW()
-		WHERE id = $4 RETURNING id, shop_id, name, slug, image_url, created_at, updated_at`
+		WHERE id = $4 AND shop_id = $5 RETURNING id, shop_id, name, slug, image_url, created_at, updated_at`
 	var c models.SiteCategory
-	err := DB.QueryRowContext(context.Background(), query, req.Name, req.Slug, req.ImageURL, id).Scan(
+	err := DB.QueryRowContext(context.Background(), query, req.Name, req.Slug, req.ImageURL, id, shopID).Scan(
 		&c.ID, &c.ShopID, &c.Name, &c.Slug, &c.ImageURL, &c.CreatedAt, &c.UpdatedAt,
 	)
 	if err != nil {
@@ -216,9 +216,9 @@ func UpdateSiteCategory(id string, req models.UpdateCategoryRequest) (*models.Si
 	return &c, nil
 }
 
-// DeleteSiteCategory deletes a category
-func DeleteSiteCategory(id string) error {
-	result, err := DB.ExecContext(context.Background(), `DELETE FROM categories WHERE id = $1`, id)
+// DeleteSiteCategory deletes a category (scoped by shop_id)
+func DeleteSiteCategory(id, shopID string) error {
+	result, err := DB.ExecContext(context.Background(), `DELETE FROM categories WHERE id = $1 AND shop_id = $2`, id, shopID)
 	if err != nil {
 		return err
 	}
@@ -255,12 +255,12 @@ func GetSiteProductsByShopID(shopID string) ([]models.SiteProduct, error) {
 	return list, nil
 }
 
-// GetSiteProductByID returns a single product with images
-func GetSiteProductByID(id string) (*models.SiteProduct, error) {
+// GetSiteProductByID returns a single product with images (scoped by shop_id)
+func GetSiteProductByID(id, shopID string) (*models.SiteProduct, error) {
 	var p models.SiteProduct
 	var catID *string
 	err := DB.QueryRowContext(context.Background(),
-		`SELECT id, shop_id, category_id, name, description, price, created_at, updated_at FROM products_sites WHERE id = $1`, id,
+		`SELECT id, shop_id, category_id, name, description, price, created_at, updated_at FROM products_sites WHERE id = $1 AND shop_id = $2`, id, shopID,
 	).Scan(&p.ID, &p.ShopID, &catID, &p.Name, &p.Description, &p.Price, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -322,12 +322,12 @@ func InsertProductImage(productID, imageURL string) error {
 	return err
 }
 
-// UpdateSiteProduct updates a product and replaces images
-func UpdateSiteProduct(id string, req models.UpdateSiteProductRequest) (*models.SiteProduct, error) {
+// UpdateSiteProduct updates a product and replaces images (scoped by shop_id)
+func UpdateSiteProduct(id, shopID string, req models.UpdateSiteProductRequest) (*models.SiteProduct, error) {
 	query := `UPDATE products_sites SET category_id = $1, name = $2, description = $3, price = $4, updated_at = NOW()
-		WHERE id = $5 RETURNING id, shop_id, category_id, name, description, price, created_at, updated_at`
+		WHERE id = $5 AND shop_id = $6 RETURNING id, shop_id, category_id, name, description, price, created_at, updated_at`
 	var p models.SiteProduct
-	err := DB.QueryRowContext(context.Background(), query, req.CategoryID, req.Name, req.Description, req.Price, id).Scan(
+	err := DB.QueryRowContext(context.Background(), query, req.CategoryID, req.Name, req.Description, req.Price, id, shopID).Scan(
 		&p.ID, &p.ShopID, &p.CategoryID, &p.Name, &p.Description, &p.Price, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
@@ -345,9 +345,9 @@ func UpdateSiteProduct(id string, req models.UpdateSiteProductRequest) (*models.
 	return &p, nil
 }
 
-// DeleteSiteProduct deletes a product (cascade deletes images)
-func DeleteSiteProduct(id string) error {
-	result, err := DB.ExecContext(context.Background(), `DELETE FROM products_sites WHERE id = $1`, id)
+// DeleteSiteProduct deletes a product (cascade deletes images, scoped by shop_id)
+func DeleteSiteProduct(id, shopID string) error {
+	result, err := DB.ExecContext(context.Background(), `DELETE FROM products_sites WHERE id = $1 AND shop_id = $2`, id, shopID)
 	if err != nil {
 		return err
 	}

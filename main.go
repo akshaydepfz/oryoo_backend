@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"net/http"
 
 	"oryoo.com/database"
@@ -70,7 +71,10 @@ func main() {
 
 	// log.Println("Welcome email sent successfully")
 
-	http.ListenAndServe(":8080", enableCors(http.DefaultServeMux))
+	log.Println("Starting server on :8080")
+	if err := http.ListenAndServe(":8080", enableCors(http.DefaultServeMux)); err != nil {
+		log.Fatalf("Server failed: %v", err)
+	}
 }
 
 func enableCors(next http.Handler) http.Handler {

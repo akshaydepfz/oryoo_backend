@@ -306,15 +306,39 @@ func CreateBillingTransactionsTable() error {
 
 // --- Oryoo Sites Tables ---
 
+// DropSitesTables drops all Oryoo Sites tables in reverse dependency order.
+// Call before CreateSitesTables when schema has changed or tables have wrong structure.
+func DropSitesTables() error {
+	tables := []string{
+		"product_images",
+		"products_sites",
+		"categories",
+		"site_configs",
+		"testimonials",
+		"about_pages",
+		"contact_pages",
+		"shops",
+	}
+	for _, t := range tables {
+		_, err := helper.DB.ExecContext(context.Background(), "DROP TABLE IF EXISTS "+t+" CASCADE")
+		if err != nil {
+			log.Printf("Error dropping table %s: %v", t, err)
+			return err
+		}
+	}
+	fmt.Println("Oryoo Sites tables dropped")
+	return nil
+}
+
 func CreateShopsTable() error {
 	query := `
 		CREATE TABLE IF NOT EXISTS shops (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			id UUID PRIMARY KEY,
 			name TEXT NOT NULL,
-			subdomain TEXT NOT NULL UNIQUE,
+			subdomain TEXT UNIQUE,
 			custom_domain TEXT,
-			created_at TIMESTAMP DEFAULT NOW(),
-			status TEXT NOT NULL DEFAULT 'active'
+			status TEXT DEFAULT 'active',
+			created_at TIMESTAMP DEFAULT NOW()
 		);
 	`
 	_, err := helper.DB.ExecContext(context.Background(), query)
@@ -322,7 +346,6 @@ func CreateShopsTable() error {
 		log.Printf("Error creating shops table: %v", err)
 		return err
 	}
-	fmt.Println("Shops table created successfully")
 	return nil
 }
 
@@ -330,13 +353,13 @@ func CreateSiteConfigsTable() error {
 	query := `
 		CREATE TABLE IF NOT EXISTS site_configs (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			shop_id UUID NOT NULL UNIQUE REFERENCES shops(id) ON DELETE CASCADE,
+			shop_id UUID UNIQUE REFERENCES shops(id) ON DELETE CASCADE,
 			shop_name TEXT,
 			tagline TEXT,
-			primary_color TEXT,
-			gold_color TEXT,
-			text_color TEXT,
-			text_muted TEXT,
+			primary_color INTEGER,
+			gold_color INTEGER,
+			text_color INTEGER,
+			text_muted INTEGER,
 			phone_number TEXT,
 			whatsapp_number TEXT,
 			store_address TEXT,
@@ -354,20 +377,17 @@ func CreateSiteConfigsTable() error {
 		log.Printf("Error creating site_configs table: %v", err)
 		return err
 	}
-	fmt.Println("Site_configs table created successfully")
 	return nil
 }
 
-func CreateSitesCategoriesTable() error {
+func CreateCategoriesTable() error {
 	query := `
 		CREATE TABLE IF NOT EXISTS categories (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
-			name TEXT NOT NULL,
-			slug TEXT NOT NULL,
-			image_url TEXT,
-			created_at TIMESTAMP DEFAULT NOW(),
-			updated_at TIMESTAMP DEFAULT NOW()
+			id UUID PRIMARY KEY,
+			shop_id UUID REFERENCES shops(id) ON DELETE CASCADE,
+			name TEXT,
+			slug TEXT,
+			image_url TEXT
 		);
 	`
 	_, err := helper.DB.ExecContext(context.Background(), query)
@@ -375,21 +395,19 @@ func CreateSitesCategoriesTable() error {
 		log.Printf("Error creating categories table: %v", err)
 		return err
 	}
-	fmt.Println("Categories table (sites) created successfully")
 	return nil
 }
 
-func CreateSitesProductsTable() error {
+func CreateProductsSitesTable() error {
 	query := `
 		CREATE TABLE IF NOT EXISTS products_sites (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+			id UUID PRIMARY KEY,
+			shop_id UUID REFERENCES shops(id) ON DELETE CASCADE,
 			category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
-			name TEXT NOT NULL,
+			name TEXT,
 			description TEXT,
-			price DOUBLE PRECISION NOT NULL DEFAULT 0,
-			created_at TIMESTAMP DEFAULT NOW(),
-			updated_at TIMESTAMP DEFAULT NOW()
+			price NUMERIC,
+			created_at TIMESTAMP DEFAULT NOW()
 		);
 	`
 	_, err := helper.DB.ExecContext(context.Background(), query)
@@ -397,7 +415,6 @@ func CreateSitesProductsTable() error {
 		log.Printf("Error creating products_sites table: %v", err)
 		return err
 	}
-	fmt.Println("Products_sites table created successfully")
 	return nil
 }
 
@@ -405,9 +422,8 @@ func CreateProductImagesTable() error {
 	query := `
 		CREATE TABLE IF NOT EXISTS product_images (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			product_id UUID NOT NULL REFERENCES products_sites(id) ON DELETE CASCADE,
-			image_url TEXT NOT NULL,
-			created_at TIMESTAMP DEFAULT NOW()
+			product_id UUID REFERENCES products_sites(id) ON DELETE CASCADE,
+			image_url TEXT
 		);
 	`
 	_, err := helper.DB.ExecContext(context.Background(), query)
@@ -415,21 +431,18 @@ func CreateProductImagesTable() error {
 		log.Printf("Error creating product_images table: %v", err)
 		return err
 	}
-	fmt.Println("Product_images table created successfully")
 	return nil
 }
 
 func CreateTestimonialsTable() error {
 	query := `
 		CREATE TABLE IF NOT EXISTS testimonials (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
-			text TEXT NOT NULL,
-			author TEXT NOT NULL,
-			rating INTEGER NOT NULL DEFAULT 5,
-			avatar_url TEXT,
-			created_at TIMESTAMP DEFAULT NOW(),
-			updated_at TIMESTAMP DEFAULT NOW()
+			id UUID PRIMARY KEY,
+			shop_id UUID REFERENCES shops(id) ON DELETE CASCADE,
+			text TEXT,
+			author TEXT,
+			rating INTEGER,
+			avatar_url TEXT
 		);
 	`
 	_, err := helper.DB.ExecContext(context.Background(), query)
@@ -437,15 +450,14 @@ func CreateTestimonialsTable() error {
 		log.Printf("Error creating testimonials table: %v", err)
 		return err
 	}
-	fmt.Println("Testimonials table created successfully")
 	return nil
 }
 
 func CreateAboutPagesTable() error {
 	query := `
 		CREATE TABLE IF NOT EXISTS about_pages (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+			id UUID PRIMARY KEY,
+			shop_id UUID REFERENCES shops(id) ON DELETE CASCADE,
 			hero_image_url TEXT,
 			title TEXT,
 			tagline TEXT,
@@ -453,9 +465,7 @@ func CreateAboutPagesTable() error {
 			story_text_secondary TEXT,
 			story_image_url TEXT,
 			values JSONB,
-			craftsmanship JSONB,
-			created_at TIMESTAMP DEFAULT NOW(),
-			updated_at TIMESTAMP DEFAULT NOW()
+			craftsmanship JSONB
 		);
 	`
 	_, err := helper.DB.ExecContext(context.Background(), query)
@@ -463,25 +473,23 @@ func CreateAboutPagesTable() error {
 		log.Printf("Error creating about_pages table: %v", err)
 		return err
 	}
-	fmt.Println("About_pages table created successfully")
 	return nil
 }
 
 func CreateContactPagesTable() error {
 	query := `
 		CREATE TABLE IF NOT EXISTS contact_pages (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+			id UUID PRIMARY KEY,
+			shop_id UUID REFERENCES shops(id) ON DELETE CASCADE,
 			title TEXT,
 			subtitle TEXT,
 			store_address TEXT,
+			store_address_short TEXT,
 			phone_number TEXT,
 			whatsapp_number TEXT,
 			email TEXT,
 			google_map_url TEXT,
-			store_hours JSONB,
-			created_at TIMESTAMP DEFAULT NOW(),
-			updated_at TIMESTAMP DEFAULT NOW()
+			store_hours JSONB
 		);
 	`
 	_, err := helper.DB.ExecContext(context.Background(), query)
@@ -489,18 +497,36 @@ func CreateContactPagesTable() error {
 		log.Printf("Error creating contact_pages table: %v", err)
 		return err
 	}
-	fmt.Println("Contact_pages table created successfully")
 	return nil
 }
 
-// CreateSitesTables creates all Oryoo Sites tables (call after ConnectDatabase)
+// CreateSitesIndexes creates indexes for performance
+func CreateSitesIndexes() error {
+	indexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_shops_subdomain ON shops(subdomain)`,
+		`CREATE INDEX IF NOT EXISTS idx_shops_custom_domain ON shops(custom_domain)`,
+		`CREATE INDEX IF NOT EXISTS idx_products_sites_shop_id ON products_sites(shop_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_categories_shop_id ON categories(shop_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_testimonials_shop_id ON testimonials(shop_id)`,
+	}
+	for _, q := range indexes {
+		if _, err := helper.DB.ExecContext(context.Background(), q); err != nil {
+			log.Printf("Error creating site index: %v", err)
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateSitesTables creates all Oryoo Sites tables in dependency order (call after ConnectDatabase).
 func CreateSitesTables() {
 	_ = CreateShopsTable()
 	_ = CreateSiteConfigsTable()
-	_ = CreateSitesCategoriesTable()
-	_ = CreateSitesProductsTable()
+	_ = CreateCategoriesTable()
+	_ = CreateProductsSitesTable()
 	_ = CreateProductImagesTable()
 	_ = CreateTestimonialsTable()
 	_ = CreateAboutPagesTable()
 	_ = CreateContactPagesTable()
+	_ = CreateSitesIndexes()
 }
