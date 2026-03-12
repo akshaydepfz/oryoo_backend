@@ -55,6 +55,17 @@ func GetShopByDomain(domain string) (*models.Shop, error) {
 	return &shop, nil
 }
 
+// ValidateOwnerID checks that the given owner_id exists in users table.
+// Returns error if not found (caller should return 400).
+func ValidateOwnerID(ownerID int) error {
+	var id int
+	err := DB.QueryRowContext(context.Background(), `SELECT id FROM users WHERE id = $1`, ownerID).Scan(&id)
+	if err != nil {
+		return fmt.Errorf("owner not found")
+	}
+	return nil
+}
+
 // InsertShop creates a new shop with the given ownerID (user id from users table)
 // and automatically creates default records in site_configs, about_pages, and contact_pages
 func InsertShop(req models.CreateShopRequest, ownerID int) (*models.Shop, error) {

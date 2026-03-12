@@ -148,6 +148,7 @@ type ShopByDomainResponse struct {
 
 // CreateShopRequest for POST /sites/admin/shops
 type CreateShopRequest struct {
+	OwnerID      int     `json:"owner_id"`
 	Name         string  `json:"name"`
 	Subdomain    string  `json:"subdomain"`
 	CustomDomain *string `json:"custom_domain,omitempty"`

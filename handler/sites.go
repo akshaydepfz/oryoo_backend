@@ -310,32 +310,24 @@ func SitesAdminUploadHandler(w http.ResponseWriter, r *http.Request) {
 // SitesAdminShopsHandler POST /sites/admin/shops, GET /sites/admin/shops
 func SitesAdminShopsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
-		firebaseUID := r.Header.Get("X-Firebase-UID")
-		if firebaseUID == "" {
-			auth := r.Header.Get("Authorization")
-			if strings.HasPrefix(auth, "Bearer ") {
-				firebaseUID = strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
-			}
-		}
-		if firebaseUID == "" {
-			http.Error(w, "authentication required: provide X-Firebase-UID header or Authorization: Bearer <firebase_uid>", http.StatusUnauthorized)
-			return
-		}
-		userID, err := helper.GetUserIDByFirebaseUID(firebaseUID)
-		if err != nil {
-			http.Error(w, "user not found", http.StatusUnauthorized)
-			return
-		}
 		var req models.CreateShopRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if req.OwnerID <= 0 {
+			http.Error(w, "owner_id is required and must be a positive number", http.StatusBadRequest)
 			return
 		}
 		if req.Name == "" || req.Subdomain == "" {
 			http.Error(w, "name and subdomain are required", http.StatusBadRequest)
 			return
 		}
-		shop, err := helper.InsertShop(req, userID)
+		if err := helper.ValidateOwnerID(req.OwnerID); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		shop, err := helper.InsertShop(req, req.OwnerID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
