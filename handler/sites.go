@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -172,8 +173,16 @@ func SitesSiteConfigHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	config, err := helper.GetSiteConfigByShopID(shopID)
 	if err != nil {
-		http.Error(w, "Site config not found", http.StatusNotFound)
-		return
+		if err == sql.ErrNoRows {
+			config, err = helper.CreateDefaultSiteConfig(shopID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(config)
@@ -192,8 +201,16 @@ func SitesAboutHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	about, err := helper.GetAboutPageByShopID(shopID)
 	if err != nil {
-		http.Error(w, "About page not found", http.StatusNotFound)
-		return
+		if err == sql.ErrNoRows {
+			about, err = helper.CreateDefaultAboutPage(shopID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(about)
@@ -212,8 +229,16 @@ func SitesContactHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	contact, err := helper.GetContactPageByShopID(shopID)
 	if err != nil {
-		http.Error(w, "Contact page not found", http.StatusNotFound)
-		return
+		if err == sql.ErrNoRows {
+			contact, err = helper.CreateDefaultContactPage(shopID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(contact)

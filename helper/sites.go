@@ -56,23 +56,59 @@ func GetShopByDomain(domain string) (*models.Shop, error) {
 }
 
 // InsertShop creates a new shop with the given ownerID (user id from users table)
+// and automatically creates default records in site_configs, about_pages, and contact_pages
 func InsertShop(req models.CreateShopRequest, ownerID int) (*models.Shop, error) {
+	ctx := context.Background()
+	tx, err := DB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
 	id := uuid.New().String()
-	query := `
+	shopQuery := `
 		INSERT INTO shops (id, name, subdomain, custom_domain, owner_id, status)
 		VALUES ($1, $2, $3, $4, $5, 'active')
 		RETURNING id, name, subdomain, custom_domain, owner_id, created_at, status
 	`
 	var shop models.Shop
 	var ownerIDOut *int
-	err := DB.QueryRowContext(context.Background(), query,
-		id, req.Name, req.Subdomain, req.CustomDomain, ownerID,
-	).Scan(&shop.ID, &shop.Name, &shop.Subdomain, &shop.CustomDomain, &ownerIDOut, &shop.CreatedAt, &shop.Status)
+	err = tx.QueryRowContext(ctx, shopQuery, id, req.Name, req.Subdomain, req.CustomDomain, ownerID).Scan(
+		&shop.ID, &shop.Name, &shop.Subdomain, &shop.CustomDomain, &ownerIDOut, &shop.CreatedAt, &shop.Status,
+	)
 	if err != nil {
 		return nil, err
 	}
 	if ownerIDOut != nil {
 		shop.OwnerID = *ownerIDOut
+	}
+
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO site_configs (shop_id, shop_name, tagline, primary_color, gold_color, text_color, text_muted)
+		VALUES ($1, '', '', '#635BFF', '#D4AF37', '#1A1A1A', '#9CA3AF')
+	`, id)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO about_pages (id, shop_id, title, story_text)
+		VALUES ($1, $2, 'About Us', '')
+	`, uuid.New().String(), id)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO contact_pages (id, shop_id, email, phone_number, store_address)
+		VALUES ($1, $2, '', '', '')
+	`, uuid.New().String(), id)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
 	}
 	return &shop, nil
 }
@@ -179,6 +215,27 @@ func GetSiteConfigByShopID(shopID string) (*models.SiteConfig, error) {
 			instagram_url, facebook_url, pinterest_url, google_map_url, created_at, updated_at
 		FROM site_configs WHERE shop_id = $1
 	`
+	err := DB.QueryRowContext(context.Background(), query, shopID).Scan(
+		&c.ID, &c.ShopID, &c.ShopName, &c.Tagline, &c.PrimaryColor, &c.GoldColor, &c.TextColor, &c.TextMuted,
+		&c.PhoneNumber, &c.WhatsappNumber, &c.StoreAddress, &c.StoreAddressShort,
+		&c.InstagramURL, &c.FacebookURL, &c.PinterestURL, &c.GoogleMapURL, &c.CreatedAt, &c.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+// CreateDefaultSiteConfig inserts a default site config for a shop and returns it
+func CreateDefaultSiteConfig(shopID string) (*models.SiteConfig, error) {
+	query := `
+		INSERT INTO site_configs (shop_id, shop_name, tagline, primary_color, gold_color, text_color, text_muted)
+		VALUES ($1, '', '', '#635BFF', '#D4AF37', '#1A1A1A', '#9CA3AF')
+		RETURNING id, shop_id, shop_name, tagline, primary_color, gold_color, text_color, text_muted,
+			phone_number, whatsapp_number, store_address, store_address_short,
+			instagram_url, facebook_url, pinterest_url, google_map_url, created_at, updated_at
+	`
+	var c models.SiteConfig
 	err := DB.QueryRowContext(context.Background(), query, shopID).Scan(
 		&c.ID, &c.ShopID, &c.ShopName, &c.Tagline, &c.PrimaryColor, &c.GoldColor, &c.TextColor, &c.TextMuted,
 		&c.PhoneNumber, &c.WhatsappNumber, &c.StoreAddress, &c.StoreAddressShort,
@@ -451,12 +508,47 @@ func GetAboutPageByShopID(shopID string) (*models.AboutPage, error) {
 	return &a, nil
 }
 
+// CreateDefaultAboutPage inserts a default about page for a shop and returns it
+func CreateDefaultAboutPage(shopID string) (*models.AboutPage, error) {
+	query := `
+		INSERT INTO about_pages (id, shop_id, title, story_text)
+		VALUES ($1, $2, 'About Us', '')
+		RETURNING id, shop_id, hero_image_url, title, tagline, story_text, story_text_secondary, story_image_url, values, craftsmanship, created_at, updated_at
+	`
+	var a models.AboutPage
+	err := DB.QueryRowContext(context.Background(), query, uuid.New().String(), shopID).Scan(
+		&a.ID, &a.ShopID, &a.HeroImageURL, &a.Title, &a.Tagline, &a.StoryText, &a.StoryTextSecondary, &a.StoryImageURL,
+		&a.Values, &a.Craftsmanship, &a.CreatedAt, &a.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
 // GetContactPageByShopID returns contact page for a shop
 func GetContactPageByShopID(shopID string) (*models.ContactPage, error) {
 	var c models.ContactPage
 	query := `SELECT id, shop_id, title, subtitle, store_address, phone_number, whatsapp_number, email, google_map_url, store_hours, created_at, updated_at
 		FROM contact_pages WHERE shop_id = $1`
 	err := DB.QueryRowContext(context.Background(), query, shopID).Scan(
+		&c.ID, &c.ShopID, &c.Title, &c.Subtitle, &c.StoreAddress, &c.PhoneNumber, &c.WhatsappNumber, &c.Email, &c.GoogleMapURL, &c.StoreHours, &c.CreatedAt, &c.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+// CreateDefaultContactPage inserts a default contact page for a shop and returns it
+func CreateDefaultContactPage(shopID string) (*models.ContactPage, error) {
+	query := `
+		INSERT INTO contact_pages (id, shop_id, email, phone_number, store_address)
+		VALUES ($1, $2, '', '', '')
+		RETURNING id, shop_id, title, subtitle, store_address, phone_number, whatsapp_number, email, google_map_url, store_hours, created_at, updated_at
+	`
+	var c models.ContactPage
+	err := DB.QueryRowContext(context.Background(), query, uuid.New().String(), shopID).Scan(
 		&c.ID, &c.ShopID, &c.Title, &c.Subtitle, &c.StoreAddress, &c.PhoneNumber, &c.WhatsappNumber, &c.Email, &c.GoogleMapURL, &c.StoreHours, &c.CreatedAt, &c.UpdatedAt,
 	)
 	if err != nil {
