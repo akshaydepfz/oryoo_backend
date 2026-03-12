@@ -303,3 +303,204 @@ func CreateBillingTransactionsTable() error {
 	fmt.Println("Billing transactions table created successfully")
 	return nil
 }
+
+// --- Oryoo Sites Tables ---
+
+func CreateShopsTable() error {
+	query := `
+		CREATE TABLE IF NOT EXISTS shops (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			name TEXT NOT NULL,
+			subdomain TEXT NOT NULL UNIQUE,
+			custom_domain TEXT,
+			created_at TIMESTAMP DEFAULT NOW(),
+			status TEXT NOT NULL DEFAULT 'active'
+		);
+	`
+	_, err := helper.DB.ExecContext(context.Background(), query)
+	if err != nil {
+		log.Printf("Error creating shops table: %v", err)
+		return err
+	}
+	fmt.Println("Shops table created successfully")
+	return nil
+}
+
+func CreateSiteConfigsTable() error {
+	query := `
+		CREATE TABLE IF NOT EXISTS site_configs (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			shop_id UUID NOT NULL UNIQUE REFERENCES shops(id) ON DELETE CASCADE,
+			shop_name TEXT,
+			tagline TEXT,
+			primary_color TEXT,
+			gold_color TEXT,
+			text_color TEXT,
+			text_muted TEXT,
+			phone_number TEXT,
+			whatsapp_number TEXT,
+			store_address TEXT,
+			store_address_short TEXT,
+			instagram_url TEXT,
+			facebook_url TEXT,
+			pinterest_url TEXT,
+			google_map_url TEXT,
+			created_at TIMESTAMP DEFAULT NOW(),
+			updated_at TIMESTAMP DEFAULT NOW()
+		);
+	`
+	_, err := helper.DB.ExecContext(context.Background(), query)
+	if err != nil {
+		log.Printf("Error creating site_configs table: %v", err)
+		return err
+	}
+	fmt.Println("Site_configs table created successfully")
+	return nil
+}
+
+func CreateSitesCategoriesTable() error {
+	query := `
+		CREATE TABLE IF NOT EXISTS categories (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+			name TEXT NOT NULL,
+			slug TEXT NOT NULL,
+			image_url TEXT,
+			created_at TIMESTAMP DEFAULT NOW(),
+			updated_at TIMESTAMP DEFAULT NOW()
+		);
+	`
+	_, err := helper.DB.ExecContext(context.Background(), query)
+	if err != nil {
+		log.Printf("Error creating categories table: %v", err)
+		return err
+	}
+	fmt.Println("Categories table (sites) created successfully")
+	return nil
+}
+
+func CreateSitesProductsTable() error {
+	query := `
+		CREATE TABLE IF NOT EXISTS products_sites (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+			category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
+			name TEXT NOT NULL,
+			description TEXT,
+			price DOUBLE PRECISION NOT NULL DEFAULT 0,
+			created_at TIMESTAMP DEFAULT NOW(),
+			updated_at TIMESTAMP DEFAULT NOW()
+		);
+	`
+	_, err := helper.DB.ExecContext(context.Background(), query)
+	if err != nil {
+		log.Printf("Error creating products_sites table: %v", err)
+		return err
+	}
+	fmt.Println("Products_sites table created successfully")
+	return nil
+}
+
+func CreateProductImagesTable() error {
+	query := `
+		CREATE TABLE IF NOT EXISTS product_images (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			product_id UUID NOT NULL REFERENCES products_sites(id) ON DELETE CASCADE,
+			image_url TEXT NOT NULL,
+			created_at TIMESTAMP DEFAULT NOW()
+		);
+	`
+	_, err := helper.DB.ExecContext(context.Background(), query)
+	if err != nil {
+		log.Printf("Error creating product_images table: %v", err)
+		return err
+	}
+	fmt.Println("Product_images table created successfully")
+	return nil
+}
+
+func CreateTestimonialsTable() error {
+	query := `
+		CREATE TABLE IF NOT EXISTS testimonials (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+			text TEXT NOT NULL,
+			author TEXT NOT NULL,
+			rating INTEGER NOT NULL DEFAULT 5,
+			avatar_url TEXT,
+			created_at TIMESTAMP DEFAULT NOW(),
+			updated_at TIMESTAMP DEFAULT NOW()
+		);
+	`
+	_, err := helper.DB.ExecContext(context.Background(), query)
+	if err != nil {
+		log.Printf("Error creating testimonials table: %v", err)
+		return err
+	}
+	fmt.Println("Testimonials table created successfully")
+	return nil
+}
+
+func CreateAboutPagesTable() error {
+	query := `
+		CREATE TABLE IF NOT EXISTS about_pages (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+			hero_image_url TEXT,
+			title TEXT,
+			tagline TEXT,
+			story_text TEXT,
+			story_text_secondary TEXT,
+			story_image_url TEXT,
+			values JSONB,
+			craftsmanship JSONB,
+			created_at TIMESTAMP DEFAULT NOW(),
+			updated_at TIMESTAMP DEFAULT NOW()
+		);
+	`
+	_, err := helper.DB.ExecContext(context.Background(), query)
+	if err != nil {
+		log.Printf("Error creating about_pages table: %v", err)
+		return err
+	}
+	fmt.Println("About_pages table created successfully")
+	return nil
+}
+
+func CreateContactPagesTable() error {
+	query := `
+		CREATE TABLE IF NOT EXISTS contact_pages (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+			title TEXT,
+			subtitle TEXT,
+			store_address TEXT,
+			phone_number TEXT,
+			whatsapp_number TEXT,
+			email TEXT,
+			google_map_url TEXT,
+			store_hours JSONB,
+			created_at TIMESTAMP DEFAULT NOW(),
+			updated_at TIMESTAMP DEFAULT NOW()
+		);
+	`
+	_, err := helper.DB.ExecContext(context.Background(), query)
+	if err != nil {
+		log.Printf("Error creating contact_pages table: %v", err)
+		return err
+	}
+	fmt.Println("Contact_pages table created successfully")
+	return nil
+}
+
+// CreateSitesTables creates all Oryoo Sites tables (call after ConnectDatabase)
+func CreateSitesTables() {
+	_ = CreateShopsTable()
+	_ = CreateSiteConfigsTable()
+	_ = CreateSitesCategoriesTable()
+	_ = CreateSitesProductsTable()
+	_ = CreateProductImagesTable()
+	_ = CreateTestimonialsTable()
+	_ = CreateAboutPagesTable()
+	_ = CreateContactPagesTable()
+}

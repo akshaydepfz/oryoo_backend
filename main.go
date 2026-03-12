@@ -10,6 +10,7 @@ import (
 func main() {
 
 	database.ConnectDatabase()
+	database.CreateSitesTables()
 	http.Handle("/users", http.HandlerFunc(handler.UserHandler))
 	http.HandleFunc("/auth/check-phone", handler.CheckPhoneHandler)
 	http.HandleFunc("/auth/register", handler.CreateUserHandler)
@@ -25,6 +26,23 @@ func main() {
 	http.HandleFunc("/payments/", handler.DeletePaymentHandler)
 	http.HandleFunc("/billing/transaction", handler.CreateBillingTransactionHandler)
 	http.HandleFunc("/app/latest-version", handler.GetLatestVersionHandler)
+
+	// Oryoo Sites - register more specific paths first
+	http.HandleFunc("/sites/shop/by-domain", handler.SitesShopByDomainHandler)
+	http.HandleFunc("/sites/products/", handler.SitesProductByIDHandler)
+	http.HandleFunc("/sites/products", handler.SitesProductsHandler)
+	http.HandleFunc("/sites/categories", handler.SitesCategoriesHandler)
+	http.HandleFunc("/sites/site-config", handler.SitesSiteConfigHandler)
+	http.HandleFunc("/sites/about", handler.SitesAboutHandler)
+	http.HandleFunc("/sites/contact", handler.SitesContactHandler)
+	http.HandleFunc("/sites/testimonials", handler.SitesTestimonialsHandler)
+	http.HandleFunc("/sites/admin/upload", handler.SitesAdminUploadHandler)
+	http.HandleFunc("/sites/admin/shops/", handler.SitesAdminShopsByIDHandler)
+	http.HandleFunc("/sites/admin/shops", handler.SitesAdminShopsHandler)
+	http.HandleFunc("/sites/admin/products/", handler.SitesAdminProductsByIDHandler)
+	http.HandleFunc("/sites/admin/products", handler.SitesAdminProductsHandler)
+	http.HandleFunc("/sites/admin/categories/", handler.SitesAdminCategoriesByIDHandler)
+	http.HandleFunc("/sites/admin/categories", handler.SitesAdminCategoriesHandler)
 
 	// Admin - list endpoints
 	http.HandleFunc("/admin/customers", handler.AdminGetCustomers)
