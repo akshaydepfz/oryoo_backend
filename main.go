@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	"oryoo.com/database"
@@ -73,9 +74,27 @@ func main() {
 	// log.Println("Welcome email sent successfully")
 
 	log.Println("Starting server on :8080")
-	if err := http.ListenAndServe(":8080", enableCors(http.DefaultServeMux)); err != nil {
+	if err := http.ListenAndServe(":8080", enableCors(adminAuthMiddleware(http.DefaultServeMux))); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
+}
+
+// adminAuthMiddleware requires Authorization: Bearer <ADMIN_SECRET> for /admin/* routes.
+// All other routes (including /sites/admin/*) pass through and use their existing auth (e.g. Firebase UID).
+func adminAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/admin/") {
+			authHeader := r.Header.Get("Authorization")
+			expected := "Bearer " + os.Getenv("ADMIN_SECRET")
+
+			if authHeader != expected {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 func enableCors(next http.Handler) http.Handler {
