@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"net/http"
-	"os"
 	"strings"
 
 	"oryoo.com/database"
@@ -79,13 +78,13 @@ func main() {
 	}
 }
 
-// adminAuthMiddleware requires Authorization: Bearer <ADMIN_SECRET> for /admin/* routes.
+// adminAuthMiddleware requires Authorization: Bearer <static secret> for /admin/* routes.
 // All other routes (including /sites/admin/*) pass through and use their existing auth (e.g. Firebase UID).
 func adminAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/admin/") {
 			authHeader := r.Header.Get("Authorization")
-			expected := "Bearer " + os.Getenv("ADMIN_SECRET")
+			expected := "Bearer 8f3k29df0sdf89sdf98sd7f98sd7f9sd87f"
 
 			if authHeader != expected {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
