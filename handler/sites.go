@@ -310,9 +310,20 @@ func SitesAdminUploadHandler(w http.ResponseWriter, r *http.Request) {
 // SitesAdminShopsHandler POST /sites/admin/shops, GET /sites/admin/shops
 func SitesAdminShopsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
-		user, err := getAuthenticatedUser(r)
+		firebaseUID := r.Header.Get("X-Firebase-UID")
+		if firebaseUID == "" {
+			auth := r.Header.Get("Authorization")
+			if strings.HasPrefix(auth, "Bearer ") {
+				firebaseUID = strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
+			}
+		}
+		if firebaseUID == "" {
+			http.Error(w, "authentication required: provide X-Firebase-UID header or Authorization: Bearer <firebase_uid>", http.StatusUnauthorized)
+			return
+		}
+		userID, err := helper.GetUserIDByFirebaseUID(firebaseUID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
+			http.Error(w, "user not found", http.StatusUnauthorized)
 			return
 		}
 		var req models.CreateShopRequest
@@ -324,7 +335,7 @@ func SitesAdminShopsHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "name and subdomain are required", http.StatusBadRequest)
 			return
 		}
-		shop, err := helper.InsertShop(req, int(user.ID))
+		shop, err := helper.InsertShop(req, userID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -334,12 +345,23 @@ func SitesAdminShopsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodGet {
-		user, err := getAuthenticatedUser(r)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
+		firebaseUID := r.Header.Get("X-Firebase-UID")
+		if firebaseUID == "" {
+			auth := r.Header.Get("Authorization")
+			if strings.HasPrefix(auth, "Bearer ") {
+				firebaseUID = strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
+			}
+		}
+		if firebaseUID == "" {
+			http.Error(w, "authentication required: provide X-Firebase-UID header or Authorization: Bearer <firebase_uid>", http.StatusUnauthorized)
 			return
 		}
-		shops, err := helper.GetShopsByOwnerID(int(user.ID))
+		userID, err := helper.GetUserIDByFirebaseUID(firebaseUID)
+		if err != nil {
+			http.Error(w, "user not found", http.StatusUnauthorized)
+			return
+		}
+		shops, err := helper.GetShopsByOwnerID(userID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

@@ -355,6 +355,17 @@ func GetClientsByCreatedBy(createdBy string) ([]models.ClientModel, error) {
 	return clientsList, nil
 }
 
+// GetUserIDByFirebaseUID returns the numeric users.id for the given firebase_uid.
+// Use this for owner_id in shops - owner_id must always be users.id, never firebase_uid.
+func GetUserIDByFirebaseUID(firebaseUID string) (int, error) {
+	var userID int
+	err := DB.QueryRow(`SELECT id FROM users WHERE firebase_uid = $1`, firebaseUID).Scan(&userID)
+	if err != nil {
+		return 0, err
+	}
+	return userID, nil
+}
+
 func GetUserByFirebaseUID(firebaseUID string) (models.User, error) {
 	rows, err := DB.Query(`
 		SELECT 
