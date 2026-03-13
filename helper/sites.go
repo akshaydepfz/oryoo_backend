@@ -2,6 +2,7 @@ package helper
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -67,7 +68,7 @@ func ValidateOwnerID(ownerID int) error {
 }
 
 // InsertShop creates a new shop with the given ownerID (user id from users table)
-// and automatically creates default records in site_configs, about_pages, and contact_pages
+// and automatically seeds default website content via seedShopData.
 func InsertShop(req models.CreateShopRequest, ownerID int) (*models.Shop, error) {
 	ctx := context.Background()
 	tx, err := DB.BeginTx(ctx, nil)
@@ -94,27 +95,7 @@ func InsertShop(req models.CreateShopRequest, ownerID int) (*models.Shop, error)
 		shop.OwnerID = *ownerIDOut
 	}
 
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO site_configs (shop_id, shop_name, tagline, primary_color, gold_color, text_color, text_muted)
-		VALUES ($1, '', '', '#635BFF', '#D4AF37', '#1A1A1A', '#9CA3AF')
-	`, id)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO about_pages (id, shop_id, title, story_text)
-		VALUES ($1, $2, 'About Us', '')
-	`, uuid.New().String(), id)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO contact_pages (id, shop_id, email, phone_number, store_address)
-		VALUES ($1, $2, '', '', '')
-	`, uuid.New().String(), id)
-	if err != nil {
+	if err := seedShopData(ctx, tx, id, req.Name); err != nil {
 		return nil, err
 	}
 
@@ -122,6 +103,94 @@ func InsertShop(req models.CreateShopRequest, ownerID int) (*models.Shop, error)
 		return nil, err
 	}
 	return &shop, nil
+}
+
+// seedShopData inserts default website content for a new shop so the site (shopname.oryoo.in)
+// has a complete layout with demo content. Customers can edit or delete from Sites Admin.
+func seedShopData(ctx context.Context, tx *sql.Tx, shopID, shopName string) error {
+	// site_configs
+	_, err := tx.ExecContext(ctx, `
+		INSERT INTO site_configs (shop_id, shop_name, tagline, primary_color, gold_color, text_color, text_muted,
+			store_address, phone_number)
+		VALUES ($1, $2, 'Crafted with passion. Designed for eternity.', '#635BFF', '#D4AF37', '#1A1A1A', '#9CA3AF',
+			'123 Jewelry Lane, Your City', '+1 234 567 8900')
+	`, shopID, shopName)
+	if err != nil {
+		return fmt.Errorf("site_configs: %w", err)
+	}
+
+	// categories
+	categoryID := uuid.New().String()
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO categories (id, shop_id, name, slug, image_url)
+		VALUES ($1, $2, 'Rings', 'rings', 'https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=800')
+	`, categoryID, shopID)
+	if err != nil {
+		return fmt.Errorf("categories: %w", err)
+	}
+
+	// products_sites - Eternal Gold Ring
+	productID := uuid.New().String()
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO products_sites (id, shop_id, category_id, name, description, price)
+		VALUES ($1, $2, $3, 'Eternal Gold Ring', 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. A timeless piece crafted with precision.', 24999.00)
+	`, productID, shopID, categoryID)
+	if err != nil {
+		return fmt.Errorf("products_sites: %w", err)
+	}
+
+	// product_images
+	for _, url := range []string{
+		"https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=800",
+		"https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=800",
+	} {
+		_, err = tx.ExecContext(ctx, `INSERT INTO product_images (product_id, image_url) VALUES ($1, $2)`, productID, url)
+		if err != nil {
+			return fmt.Errorf("product_images: %w", err)
+		}
+	}
+
+	// about_pages
+	loremStory := "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO about_pages (id, shop_id, hero_image_url, title, tagline, story_text, story_text_secondary, story_image_url)
+		VALUES ($1, $2, 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=1200', 'About Us', 'Our Story of Craftsmanship',
+			$3, 'Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.', 'https://images.unsplash.com/photo-1602751584552-8ba73aad10e1?w=800')
+	`, uuid.New().String(), shopID, loremStory)
+	if err != nil {
+		return fmt.Errorf("about_pages: %w", err)
+	}
+
+	// contact_pages
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO contact_pages (id, shop_id, title, subtitle, store_address, phone_number, email)
+		VALUES ($1, $2, 'Get in Touch', 'We would love to hear from you', '123 Jewelry Lane, Your City', '+1 234 567 8900', 'hello@example.com')
+	`, uuid.New().String(), shopID)
+	if err != nil {
+		return fmt.Errorf("contact_pages: %w", err)
+	}
+
+	// testimonials
+	testimonials := []struct {
+		text   string
+		author string
+		rating int
+		avatar string
+	}{
+		{"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Exceptional quality and service!", "Priya S.", 5, "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200"},
+		{"Ut enim ad minim veniam, quis nostrud exercitation. Beautiful craftsmanship.", "Rahul M.", 5, "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200"},
+	}
+	for _, t := range testimonials {
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO testimonials (id, shop_id, text, author, rating, avatar_url)
+			VALUES ($1, $2, $3, $4, $5, $6)
+		`, uuid.New().String(), shopID, t.text, t.author, t.rating, t.avatar)
+		if err != nil {
+			return fmt.Errorf("testimonials: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // GetAllShops returns all shops (for backward compatibility; prefer GetShopsByOwnerID for admin)

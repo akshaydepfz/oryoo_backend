@@ -33,8 +33,49 @@ func ConnectDatabase() {
 		log.Fatalf("Error connecting to the database: %v", err)
 	}
 
+	runMigrations(helper.DB)
 	fmt.Println("Database connection established")
 
+}
+
+// runMigrations applies schema migrations to ensure required columns exist.
+// Safe to run on every startup; ADD COLUMN IF NOT EXISTS is idempotent.
+func runMigrations(db *sql.DB) {
+	migrations := []struct {
+		name  string
+		query string
+	}{
+		{
+			"contact_pages created_at",
+			`ALTER TABLE contact_pages ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();`,
+		},
+		{
+			"contact_pages updated_at",
+			`ALTER TABLE contact_pages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();`,
+		},
+		{
+			"testimonials created_at",
+			`ALTER TABLE testimonials ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();`,
+		},
+		{
+			"testimonials updated_at",
+			`ALTER TABLE testimonials ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();`,
+		},
+		{
+			"about_pages created_at",
+			`ALTER TABLE about_pages ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();`,
+		},
+		{
+			"about_pages updated_at",
+			`ALTER TABLE about_pages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();`,
+		},
+	}
+	for _, m := range migrations {
+		_, err := db.Exec(m.query)
+		if err != nil {
+			log.Printf("Migration %s: %v", m.name, err)
+		}
+	}
 }
 
 func CreateUsersTable() error {
@@ -369,10 +410,10 @@ func CreateSiteConfigsTable() error {
 			shop_id UUID UNIQUE REFERENCES shops(id) ON DELETE CASCADE,
 			shop_name TEXT,
 			tagline TEXT,
-			primary_color INTEGER,
-			gold_color INTEGER,
-			text_color INTEGER,
-			text_muted INTEGER,
+			primary_color TEXT,
+			gold_color TEXT,
+			text_color TEXT,
+			text_muted TEXT,
 			phone_number TEXT,
 			whatsapp_number TEXT,
 			store_address TEXT,
@@ -389,6 +430,25 @@ func CreateSiteConfigsTable() error {
 	if err != nil {
 		log.Printf("Error creating site_configs table: %v", err)
 		return err
+	}
+	// Migration: alter color columns from INTEGER to TEXT for existing deployments
+	_ = MigrateSiteConfigsColorsToText()
+	return nil
+}
+
+// MigrateSiteConfigsColorsToText alters color columns from INTEGER to TEXT (for existing tables created with INTEGER).
+func MigrateSiteConfigsColorsToText() error {
+	migrations := []string{
+		`ALTER TABLE site_configs ALTER COLUMN primary_color TYPE TEXT USING primary_color::TEXT`,
+		`ALTER TABLE site_configs ALTER COLUMN gold_color TYPE TEXT USING gold_color::TEXT`,
+		`ALTER TABLE site_configs ALTER COLUMN text_color TYPE TEXT USING text_color::TEXT`,
+		`ALTER TABLE site_configs ALTER COLUMN text_muted TYPE TEXT USING text_muted::TEXT`,
+	}
+	for _, q := range migrations {
+		if _, err := helper.DB.ExecContext(context.Background(), q); err != nil {
+			// Column may already be TEXT (new deployments); log and continue
+			log.Printf("Migration site_configs colors (may be no-op): %v", err)
+		}
 	}
 	return nil
 }
