@@ -107,70 +107,121 @@ func InsertShop(req models.CreateShopRequest, ownerID int) (*models.Shop, error)
 
 // seedShopData inserts default website content for a new shop so the site (shopname.oryoo.in)
 // has a complete layout with demo content. Customers can edit or delete from Sites Admin.
+// Uses Unsplash images, lorem ipsum text, and varied product prices for a realistic demo.
 func seedShopData(ctx context.Context, tx *sql.Tx, shopID, shopName string) error {
-	// site_configs
+	// site_configs - full defaults with lorem ipsum tagline
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO site_configs (shop_id, shop_name, tagline, primary_color, gold_color, text_color, text_muted,
-			store_address, phone_number)
-		VALUES ($1, $2, 'Crafted with passion. Designed for eternity.', '#635BFF', '#D4AF37', '#1A1A1A', '#9CA3AF',
-			'123 Jewelry Lane, Your City', '+1 234 567 8900')
+			store_address, store_address_short, phone_number, whatsapp_number, instagram_url, facebook_url, pinterest_url)
+		VALUES ($1, $2, 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Crafted with passion.', '#635BFF', '#D4AF37', '#1A1A1A', '#9CA3AF',
+			'123 Jewelry Lane, Your City', '123 Jewelry Lane', '+1 234 567 8900', '+1 234 567 8900',
+			'https://instagram.com', 'https://facebook.com', 'https://pinterest.com')
 	`, shopID, shopName)
 	if err != nil {
 		return fmt.Errorf("site_configs: %w", err)
 	}
 
-	// categories
-	categoryID := uuid.New().String()
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO categories (id, shop_id, name, slug, image_url)
-		VALUES ($1, $2, 'Rings', 'rings', 'https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=800')
-	`, categoryID, shopID)
-	if err != nil {
-		return fmt.Errorf("categories: %w", err)
+	// categories - multiple with Unsplash images
+	categories := []struct {
+		id   string
+		name string
+		slug string
+		img  string
+	}{
+		{uuid.New().String(), "Rings", "rings", "https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=800"},
+		{uuid.New().String(), "Necklaces", "necklaces", "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=800"},
+		{uuid.New().String(), "Bracelets", "bracelets", "https://images.unsplash.com/photo-1611652022419-a9419f74343a?w=800"},
+		{uuid.New().String(), "Earrings", "earrings", "https://images.unsplash.com/photo-1573408301185-9146fe634ad0?w=800"},
 	}
-
-	// products_sites - Eternal Gold Ring
-	productID := uuid.New().String()
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO products_sites (id, shop_id, category_id, name, description, price)
-		VALUES ($1, $2, $3, 'Eternal Gold Ring', 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. A timeless piece crafted with precision.', 24999.00)
-	`, productID, shopID, categoryID)
-	if err != nil {
-		return fmt.Errorf("products_sites: %w", err)
-	}
-
-	// product_images
-	for _, url := range []string{
-		"https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=800",
-		"https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=800",
-	} {
-		_, err = tx.ExecContext(ctx, `INSERT INTO product_images (product_id, image_url) VALUES ($1, $2)`, productID, url)
+	for _, cat := range categories {
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO categories (id, shop_id, name, slug, image_url)
+			VALUES ($1, $2, $3, $4, $5)
+		`, cat.id, shopID, cat.name, cat.slug, cat.img)
 		if err != nil {
-			return fmt.Errorf("product_images: %w", err)
+			return fmt.Errorf("categories: %w", err)
 		}
 	}
 
-	// about_pages
+	// products_sites - multiple products with varied prices (earnings) and lorem ipsum
+	products := []struct {
+		id          string
+		categoryIdx int
+		name        string
+		desc        string
+		price       float64
+		images      []string
+	}{
+		{
+			uuid.New().String(), 0,
+			"Eternal Gold Ring",
+			"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. A timeless piece crafted with precision.",
+			24999.00,
+			[]string{"https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=800", "https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=800"},
+		},
+		{
+			uuid.New().String(), 1,
+			"Classic Pearl Necklace",
+			"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+			18999.00,
+			[]string{"https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=800", "https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=800"},
+		},
+		{
+			uuid.New().String(), 2,
+			"Elegant Gold Bracelet",
+			"Lorem ipsum dolor sit amet, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Duis aute irure dolor in reprehenderit in voluptate.",
+			15999.00,
+			[]string{"https://images.unsplash.com/photo-1611652022419-a9419f74343a?w=800", "https://images.unsplash.com/photo-1602751584552-8ba73aad10e1?w=800"},
+		},
+		{
+			uuid.New().String(), 3,
+			"Diamond Stud Earrings",
+			"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
+			32999.00,
+			[]string{"https://images.unsplash.com/photo-1573408301185-9146fe634ad0?w=800", "https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=800"},
+		},
+	}
+	for _, p := range products {
+		catID := categories[p.categoryIdx].id
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO products_sites (id, shop_id, category_id, name, description, price)
+			VALUES ($1, $2, $3, $4, $5, $6)
+		`, p.id, shopID, catID, p.name, p.desc, p.price)
+		if err != nil {
+			return fmt.Errorf("products_sites: %w", err)
+		}
+		for _, url := range p.images {
+			_, err = tx.ExecContext(ctx, `INSERT INTO product_images (product_id, image_url) VALUES ($1, $2)`, p.id, url)
+			if err != nil {
+				return fmt.Errorf("product_images: %w", err)
+			}
+		}
+	}
+
+	// about_pages - full lorem ipsum content with Unsplash hero and story images
 	loremStory := "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris."
+	loremSecondary := "Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO about_pages (id, shop_id, hero_image_url, title, tagline, story_text, story_text_secondary, story_image_url)
-		VALUES ($1, $2, 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=1200', 'About Us', 'Our Story of Craftsmanship',
-			$3, 'Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.', 'https://images.unsplash.com/photo-1602751584552-8ba73aad10e1?w=800')
-	`, uuid.New().String(), shopID, loremStory)
+		INSERT INTO about_pages (id, shop_id, hero_image_url, title, tagline, story_text, story_text_secondary, story_image_url, values, craftsmanship)
+		VALUES ($1, $2, 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=1200', 'About Us', 'Lorem ipsum dolor sit amet - Our Story of Craftsmanship',
+			$3, $4, 'https://images.unsplash.com/photo-1602751584552-8ba73aad10e1?w=800',
+			'{"quality":"Lorem ipsum dolor sit amet, consectetur adipiscing elit.","craftsmanship":"Sed do eiusmod tempor incididunt ut labore.","heritage":"Ut enim ad minim veniam, quis nostrud."}'::jsonb,
+			'{"process":"Lorem ipsum dolor sit amet, sed do eiusmod tempor.","materials":"Ut labore et dolore magna aliqua.","finishing":"Duis aute irure dolor in reprehenderit."}'::jsonb)
+	`, uuid.New().String(), shopID, loremStory, loremSecondary)
 	if err != nil {
 		return fmt.Errorf("about_pages: %w", err)
 	}
 
-	// contact_pages
+	// contact_pages - lorem ipsum subtitle
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO contact_pages (id, shop_id, title, subtitle, store_address, phone_number, email)
-		VALUES ($1, $2, 'Get in Touch', 'We would love to hear from you', '123 Jewelry Lane, Your City', '+1 234 567 8900', 'hello@example.com')
+		VALUES ($1, $2, 'Get in Touch', 'Lorem ipsum dolor sit amet - We would love to hear from you', '123 Jewelry Lane, Your City', '+1 234 567 8900', 'hello@example.com')
 	`, uuid.New().String(), shopID)
 	if err != nil {
 		return fmt.Errorf("contact_pages: %w", err)
 	}
 
-	// testimonials
+	// testimonials - lorem ipsum with Unsplash avatars
 	testimonials := []struct {
 		text   string
 		author string
@@ -179,6 +230,8 @@ func seedShopData(ctx context.Context, tx *sql.Tx, shopID, shopName string) erro
 	}{
 		{"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Exceptional quality and service!", "Priya S.", 5, "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200"},
 		{"Ut enim ad minim veniam, quis nostrud exercitation. Beautiful craftsmanship.", "Rahul M.", 5, "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200"},
+		{"Lorem ipsum dolor sit amet, sed do eiusmod tempor incididunt. Highly recommend!", "Anita K.", 5, "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200"},
+		{"Duis aute irure dolor in reprehenderit. Stunning pieces.", "Vikram R.", 5, "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200"},
 	}
 	for _, t := range testimonials {
 		_, err = tx.ExecContext(ctx, `
