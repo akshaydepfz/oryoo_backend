@@ -33,7 +33,8 @@ func ConnectDatabase() {
 		log.Fatalf("Error connecting to the database: %v", err)
 	}
 
-	runMigrations(helper.DB)
+	// runMigrations(helper.DB)
+	// RunSitesMigrations(helper.DB)
 	fmt.Println("Database connection established")
 
 }
@@ -74,6 +75,34 @@ func runMigrations(db *sql.DB) {
 		_, err := db.Exec(m.query)
 		if err != nil {
 			log.Printf("Migration %s: %v", m.name, err)
+		}
+	}
+}
+
+// RunSitesMigrations adds missing columns for Sites UI. Safe to run on every startup.
+func RunSitesMigrations(db *sql.DB) {
+	migrations := []struct {
+		name  string
+		query string
+	}{
+		{"products_sites updated_at", `ALTER TABLE products_sites ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();`},
+		{"products_sites featured", `ALTER TABLE products_sites ADD COLUMN IF NOT EXISTS featured BOOLEAN DEFAULT FALSE;`},
+		{"products_sites slug", `ALTER TABLE products_sites ADD COLUMN IF NOT EXISTS slug TEXT;`},
+		{"site_configs hero_image_url", `ALTER TABLE site_configs ADD COLUMN IF NOT EXISTS hero_image_url TEXT;`},
+		{"site_configs hero_title", `ALTER TABLE site_configs ADD COLUMN IF NOT EXISTS hero_title TEXT;`},
+		{"site_configs hero_subtitle", `ALTER TABLE site_configs ADD COLUMN IF NOT EXISTS hero_subtitle TEXT;`},
+		{"site_configs logo_url", `ALTER TABLE site_configs ADD COLUMN IF NOT EXISTS logo_url TEXT;`},
+		{"site_configs email", `ALTER TABLE site_configs ADD COLUMN IF NOT EXISTS email TEXT;`},
+		{"site_configs secondary_color", `ALTER TABLE site_configs ADD COLUMN IF NOT EXISTS secondary_color TEXT;`},
+		{"site_configs twitter_url", `ALTER TABLE site_configs ADD COLUMN IF NOT EXISTS twitter_url TEXT;`},
+		{"contact_pages latitude", `ALTER TABLE contact_pages ADD COLUMN IF NOT EXISTS latitude NUMERIC;`},
+		{"contact_pages longitude", `ALTER TABLE contact_pages ADD COLUMN IF NOT EXISTS longitude NUMERIC;`},
+		{"contact_pages map_embed_url", `ALTER TABLE contact_pages ADD COLUMN IF NOT EXISTS map_embed_url TEXT;`},
+	}
+	for _, m := range migrations {
+		_, err := db.Exec(m.query)
+		if err != nil {
+			log.Printf("RunSitesMigrations %s: %v", m.name, err)
 		}
 	}
 }

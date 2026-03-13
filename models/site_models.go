@@ -23,17 +23,24 @@ type SiteConfig struct {
 	ShopID             string  `json:"shop_id"`
 	ShopName           *string `json:"shop_name,omitempty"`
 	Tagline            *string `json:"tagline,omitempty"`
+	HeroImageURL       *string `json:"hero_image_url,omitempty"`
+	HeroTitle          *string `json:"hero_title,omitempty"`
+	HeroSubtitle       *string `json:"hero_subtitle,omitempty"`
+	LogoURL            *string `json:"logo_url,omitempty"`
 	PrimaryColor       *string `json:"primary_color,omitempty"`
 	GoldColor          *string `json:"gold_color,omitempty"`
+	SecondaryColor     *string `json:"secondary_color,omitempty"`
 	TextColor          *string `json:"text_color,omitempty"`
 	TextMuted          *string `json:"text_muted,omitempty"`
 	PhoneNumber        *string `json:"phone_number,omitempty"`
 	WhatsappNumber     *string `json:"whatsapp_number,omitempty"`
+	Email              *string `json:"email,omitempty"`
 	StoreAddress       *string `json:"store_address,omitempty"`
 	StoreAddressShort  *string `json:"store_address_short,omitempty"`
 	InstagramURL       *string `json:"instagram_url,omitempty"`
 	FacebookURL        *string `json:"facebook_url,omitempty"`
 	PinterestURL       *string `json:"pinterest_url,omitempty"`
+	TwitterURL         *string `json:"twitter_url,omitempty"`
 	GoogleMapURL       *string `json:"google_map_url,omitempty"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
@@ -58,6 +65,8 @@ type SiteProduct struct {
 	Name        string     `json:"name"`
 	Description *string    `json:"description,omitempty"`
 	Price       float64    `json:"price"`
+	Slug        *string    `json:"slug,omitempty"`
+	Featured    bool       `json:"featured"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 	Images      []string   `json:"images,omitempty"`
@@ -109,7 +118,10 @@ type ContactPage struct {
 	PhoneNumber    *string   `json:"phone_number,omitempty"`
 	WhatsappNumber *string   `json:"whatsapp_number,omitempty"`
 	Email          *string   `json:"email,omitempty"`
+	Latitude       *float64  `json:"latitude,omitempty"`
+	Longitude      *float64  `json:"longitude,omitempty"`
 	GoogleMapURL   *string   `json:"google_map_url,omitempty"`
+	MapEmbedURL    *string   `json:"map_embed_url,omitempty"`
 	StoreHours     JSONB     `json:"store_hours,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
