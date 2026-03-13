@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -363,11 +364,17 @@ func SitesAdminShopsHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		// 1. Insert the shop first; confirm insert succeeded
 		shop, err := helper.InsertShop(req, req.OwnerID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		// 2. Only AFTER successful insert: seed default site content
+		if err := helper.CreateDefaultSiteContent(shop.ID); err != nil {
+			log.Println("default site content failed:", err)
+		}
+		// 3. Return the shop response
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(shop)
 		return

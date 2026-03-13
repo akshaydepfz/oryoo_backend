@@ -33,8 +33,8 @@ func ConnectDatabase() {
 		log.Fatalf("Error connecting to the database: %v", err)
 	}
 
-	// runMigrations(helper.DB)
-	// RunSitesMigrations(helper.DB)
+	runMigrations(helper.DB)
+	RunSitesMigrations(helper.DB)
 	fmt.Println("Database connection established")
 
 }

@@ -67,16 +67,10 @@ func ValidateOwnerID(ownerID int) error {
 	return nil
 }
 
-// InsertShop creates a new shop with the given ownerID (user id from users table)
-// and automatically seeds default website content via seedShopData.
+// InsertShop creates a new shop with the given ownerID (user id from users table).
+// Caller must call CreateDefaultSiteContent(shop.ID) after successful insert to seed demo data.
 func InsertShop(req models.CreateShopRequest, ownerID int) (*models.Shop, error) {
 	ctx := context.Background()
-	tx, err := DB.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-
 	id := uuid.New().String()
 	shopQuery := `
 		INSERT INTO shops (id, name, subdomain, custom_domain, owner_id, status)
@@ -85,7 +79,7 @@ func InsertShop(req models.CreateShopRequest, ownerID int) (*models.Shop, error)
 	`
 	var shop models.Shop
 	var ownerIDOut *int
-	err = tx.QueryRowContext(ctx, shopQuery, id, req.Name, req.Subdomain, req.CustomDomain, ownerID).Scan(
+	err := DB.QueryRowContext(ctx, shopQuery, id, req.Name, req.Subdomain, req.CustomDomain, ownerID).Scan(
 		&shop.ID, &shop.Name, &shop.Subdomain, &shop.CustomDomain, &ownerIDOut, &shop.CreatedAt, &shop.Status,
 	)
 	if err != nil {
@@ -94,21 +88,30 @@ func InsertShop(req models.CreateShopRequest, ownerID int) (*models.Shop, error)
 	if ownerIDOut != nil {
 		shop.OwnerID = *ownerIDOut
 	}
-
-	if err := createDefaultSiteContentTx(ctx, tx, id); err != nil {
-		return nil, err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
 	return &shop, nil
 }
 
 // CreateDefaultSiteContent inserts default demo content for a new shop so the site never loads empty.
-// Before inserting, checks if site_configs already has data for the shop; if so, skips initialization.
-// Can be called with a transaction (for use within InsertShop) or standalone.
+// Verifies the shop exists before inserting. Skips if site_configs already has data for the shop.
 func CreateDefaultSiteContent(shopID string) error {
+	// Verify shop exists before inserting (prevents FK violation)
+	var exists bool
+	if err := DB.QueryRowContext(context.Background(), `SELECT EXISTS(SELECT 1 FROM shops WHERE id = $1)`, shopID).Scan(&exists); err != nil {
+		return fmt.Errorf("check shop exists: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("shop does not exist")
+	}
+
+	// Prevent duplicate demo data
+	var count int
+	if err := DB.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM site_configs WHERE shop_id = $1`, shopID).Scan(&count); err != nil {
+		return fmt.Errorf("check site_configs: %w", err)
+	}
+	if count > 0 {
+		return nil // data already exists, skip
+	}
+
 	tx, err := DB.BeginTx(context.Background(), nil)
 	if err != nil {
 		return err
@@ -120,16 +123,9 @@ func CreateDefaultSiteContent(shopID string) error {
 	return tx.Commit()
 }
 
-// createDefaultSiteContentTx inserts default content within a transaction. Used by InsertShop and CreateDefaultSiteContent.
+// createDefaultSiteContentTx inserts default content within a transaction.
+// Caller must verify shop exists and no duplicate data before calling.
 func createDefaultSiteContentTx(ctx context.Context, tx *sql.Tx, shopID string) error {
-	var count int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM site_configs WHERE shop_id = $1`, shopID).Scan(&count); err != nil {
-		return fmt.Errorf("check site_configs: %w", err)
-	}
-	if count > 0 {
-		return nil // data already exists, skip
-	}
-
 	// site_configs - full defaults per spec
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO site_configs (shop_id, shop_name, tagline, hero_image_url, hero_title, hero_subtitle,
@@ -364,8 +360,16 @@ func GetSiteConfigByShopID(shopID string) (*models.SiteConfig, error) {
 	return &c, nil
 }
 
-// CreateDefaultSiteConfig inserts a default site config for a shop and returns it
+// CreateDefaultSiteConfig inserts a default site config for a shop and returns it.
+// Returns error if shop does not exist (prevents FK violation).
 func CreateDefaultSiteConfig(shopID string) (*models.SiteConfig, error) {
+	var exists bool
+	if err := DB.QueryRowContext(context.Background(), `SELECT EXISTS(SELECT 1 FROM shops WHERE id = $1)`, shopID).Scan(&exists); err != nil {
+		return nil, fmt.Errorf("check shop exists: %w", err)
+	}
+	if !exists {
+		return nil, fmt.Errorf("shop does not exist")
+	}
 	query := `
 		INSERT INTO site_configs (shop_id, shop_name, tagline, primary_color, gold_color, text_color, text_muted)
 		VALUES ($1, '', '', '#635BFF', '#D4AF37', '#1A1A1A', '#9CA3AF')
@@ -650,8 +654,16 @@ func GetAboutPageByShopID(shopID string) (*models.AboutPage, error) {
 	return &a, nil
 }
 
-// CreateDefaultAboutPage inserts a default about page for a shop and returns it
+// CreateDefaultAboutPage inserts a default about page for a shop and returns it.
+// Returns error if shop does not exist (prevents FK violation).
 func CreateDefaultAboutPage(shopID string) (*models.AboutPage, error) {
+	var exists bool
+	if err := DB.QueryRowContext(context.Background(), `SELECT EXISTS(SELECT 1 FROM shops WHERE id = $1)`, shopID).Scan(&exists); err != nil {
+		return nil, fmt.Errorf("check shop exists: %w", err)
+	}
+	if !exists {
+		return nil, fmt.Errorf("shop does not exist")
+	}
 	query := `
 		INSERT INTO about_pages (id, shop_id, title, story_text)
 		VALUES ($1, $2, 'About Us', '')
@@ -682,8 +694,16 @@ func GetContactPageByShopID(shopID string) (*models.ContactPage, error) {
 	return &c, nil
 }
 
-// CreateDefaultContactPage inserts a default contact page for a shop and returns it
+// CreateDefaultContactPage inserts a default contact page for a shop and returns it.
+// Returns error if shop does not exist (prevents FK violation).
 func CreateDefaultContactPage(shopID string) (*models.ContactPage, error) {
+	var exists bool
+	if err := DB.QueryRowContext(context.Background(), `SELECT EXISTS(SELECT 1 FROM shops WHERE id = $1)`, shopID).Scan(&exists); err != nil {
+		return nil, fmt.Errorf("check shop exists: %w", err)
+	}
+	if !exists {
+		return nil, fmt.Errorf("shop does not exist")
+	}
 	query := `
 		INSERT INTO contact_pages (id, shop_id, email, phone_number, store_address)
 		VALUES ($1, $2, '', '', '')
