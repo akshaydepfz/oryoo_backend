@@ -286,6 +286,35 @@ func SitesTestimonialsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(testimonials)
 }
 
+// SitesPaymentConfigHandler GET /sites/payment-config?shop_id=
+func SitesPaymentConfigHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	shopID := r.URL.Query().Get("shop_id")
+	if shopID == "" {
+		http.Error(w, "shop_id is required", http.StatusBadRequest)
+		return
+	}
+	cfg, err := helper.GetPaymentConfigByShopID(shopID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// No config yet: return disabled
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(models.PaymentConfigResponse{
+				PaymentEnabled: false,
+				RazorpayKey:    nil,
+			})
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(cfg)
+}
+
 // SitesAdminUploadHandler POST /sites/admin/upload - multipart file upload to S3
 func SitesAdminUploadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -641,6 +670,256 @@ func SitesAdminCategoriesByIDHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "message": "Category deleted successfully", "id": id})
 		return
 	}
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+// SitesAdminProductVariantsHandler POST /sites/admin/product-variants, GET /sites/admin/product-variants?product_id=
+func SitesAdminProductVariantsHandler(w http.ResponseWriter, r *http.Request) {
+	user, isAdmin, err := getAuthenticatedUserOrAdmin(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		var req models.CreateProductVariantRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if req.ProductID == "" || req.Name == "" {
+			http.Error(w, "product_id and name are required", http.StatusBadRequest)
+			return
+		}
+		if !isAdmin {
+			if err := helper.VerifyProductOwnership(req.ProductID, int(user.ID)); err != nil {
+				http.Error(w, err.Error(), http.StatusForbidden)
+				return
+			}
+		}
+		variant, err := helper.CreateProductVariant(req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(variant)
+		return
+	}
+
+	if r.Method == http.MethodGet {
+		productID := r.URL.Query().Get("product_id")
+		if productID == "" {
+			http.Error(w, "product_id is required", http.StatusBadRequest)
+			return
+		}
+		if !isAdmin {
+			if err := helper.VerifyProductOwnership(productID, int(user.ID)); err != nil {
+				http.Error(w, err.Error(), http.StatusForbidden)
+				return
+			}
+		}
+		variants, err := helper.GetProductVariantsByProduct(productID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(variants)
+		return
+	}
+
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+// SitesAdminProductVariantsByIDHandler PUT /sites/admin/product-variants/{id}, DELETE /sites/admin/product-variants/{id}
+func SitesAdminProductVariantsByIDHandler(w http.ResponseWriter, r *http.Request) {
+	user, isAdmin, err := getAuthenticatedUserOrAdmin(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/sites/admin/product-variants/")
+	if id == "" || !isValidUUID(id) {
+		http.Error(w, "Invalid variant ID", http.StatusBadRequest)
+		return
+	}
+
+	// Verify ownership via product
+	var productID string
+	v, err := helper.GetProductVariantByID(id)
+	if err != nil {
+		http.Error(w, "Variant not found", http.StatusNotFound)
+		return
+	}
+	productID = v.ProductID
+	if !isAdmin {
+		if err := helper.VerifyProductOwnership(productID, int(user.ID)); err != nil {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+	}
+
+	if r.Method == http.MethodPut {
+		var req models.UpdateProductVariantRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if req.Name == "" {
+			http.Error(w, "name is required", http.StatusBadRequest)
+			return
+		}
+		updated, err := helper.UpdateProductVariant(id, req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(updated)
+		return
+	}
+
+	if r.Method == http.MethodDelete {
+		if err := helper.DeleteProductVariant(id); err != nil {
+			if err.Error() == "variant not found" {
+				http.Error(w, "Variant not found", http.StatusNotFound)
+				return
+			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "message": "Variant deleted successfully", "id": id})
+		return
+	}
+
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+// SitesOrdersHandler POST /sites/orders
+func SitesOrdersHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req models.CreateSiteOrderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.ShopID == "" || req.CustomerName == "" || req.Phone == "" || req.Address == "" {
+		http.Error(w, "shop_id, customer_name, phone and address are required", http.StatusBadRequest)
+		return
+	}
+	if len(req.Items) == 0 {
+		http.Error(w, "items are required", http.StatusBadRequest)
+		return
+	}
+
+	order, err := helper.CreateSiteOrder(req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(order)
+}
+
+// SitesAdminOrdersHandler GET /sites/admin/orders?shop_id=
+func SitesAdminOrdersHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	user, isAdmin, err := getAuthenticatedUserOrAdmin(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	shopID := r.URL.Query().Get("shop_id")
+	if shopID == "" {
+		http.Error(w, "shop_id is required", http.StatusBadRequest)
+		return
+	}
+	if !isAdmin {
+		if err := helper.VerifyShopOwnership(shopID, int(user.ID)); err != nil {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+	}
+	orders, err := helper.GetSiteOrdersByShopID(shopID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(orders)
+}
+
+// SitesAdminOrdersByIDHandler GET /sites/admin/orders/{id}, PUT /sites/admin/orders/{id}/status
+func SitesAdminOrdersByIDHandler(w http.ResponseWriter, r *http.Request) {
+	user, isAdmin, err := getAuthenticatedUserOrAdmin(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	path := r.URL.Path
+	if strings.HasSuffix(path, "/status") && r.Method == http.MethodPut {
+		id := strings.TrimPrefix(strings.TrimSuffix(path, "/status"), "/sites/admin/orders/")
+		if id == "" || !isValidUUID(id) {
+			http.Error(w, "Invalid order ID", http.StatusBadRequest)
+			return
+		}
+		order, err := helper.GetSiteOrderByID(id)
+		if err != nil {
+			http.Error(w, "Order not found", http.StatusNotFound)
+			return
+		}
+		if !isAdmin {
+			if err := helper.VerifyShopOwnership(order.ShopID, int(user.ID)); err != nil {
+				http.Error(w, err.Error(), http.StatusForbidden)
+				return
+			}
+		}
+		var req models.UpdateSiteOrderStatusRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+		updated, err := helper.UpdateSiteOrderStatus(id, req.OrderStatus)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(updated)
+		return
+	}
+
+	if r.Method == http.MethodGet {
+		id := strings.TrimPrefix(path, "/sites/admin/orders/")
+		if id == "" || !isValidUUID(id) {
+			http.Error(w, "Invalid order ID", http.StatusBadRequest)
+			return
+		}
+		order, err := helper.GetSiteOrderByID(id)
+		if err != nil {
+			http.Error(w, "Order not found", http.StatusNotFound)
+			return
+		}
+		if !isAdmin {
+			if err := helper.VerifyShopOwnership(order.ShopID, int(user.ID)); err != nil {
+				http.Error(w, err.Error(), http.StatusForbidden)
+				return
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(order)
+		return
+	}
+
 	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 }
 

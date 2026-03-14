@@ -95,6 +95,10 @@ func RunSitesMigrations(db *sql.DB) {
 		{"site_configs email", `ALTER TABLE site_configs ADD COLUMN IF NOT EXISTS email TEXT;`},
 		{"site_configs secondary_color", `ALTER TABLE site_configs ADD COLUMN IF NOT EXISTS secondary_color TEXT;`},
 		{"site_configs twitter_url", `ALTER TABLE site_configs ADD COLUMN IF NOT EXISTS twitter_url TEXT;`},
+		{"site_configs razorpay_key_id", `ALTER TABLE site_configs ADD COLUMN IF NOT EXISTS razorpay_key_id TEXT;`},
+		{"site_configs razorpay_key_secret", `ALTER TABLE site_configs ADD COLUMN IF NOT EXISTS razorpay_key_secret TEXT;`},
+		{"site_configs payment_enabled", `ALTER TABLE site_configs ADD COLUMN IF NOT EXISTS payment_enabled BOOLEAN DEFAULT FALSE;`},
+		{"product_images position", `ALTER TABLE product_images ADD COLUMN IF NOT EXISTS position INT DEFAULT 0;`},
 		{"contact_pages latitude", `ALTER TABLE contact_pages ADD COLUMN IF NOT EXISTS latitude NUMERIC;`},
 		{"contact_pages longitude", `ALTER TABLE contact_pages ADD COLUMN IF NOT EXISTS longitude NUMERIC;`},
 		{"contact_pages map_embed_url", `ALTER TABLE contact_pages ADD COLUMN IF NOT EXISTS map_embed_url TEXT;`},
@@ -451,6 +455,9 @@ func CreateSiteConfigsTable() error {
 			facebook_url TEXT,
 			pinterest_url TEXT,
 			google_map_url TEXT,
+			razorpay_key_id TEXT,
+			razorpay_key_secret TEXT,
+			payment_enabled BOOLEAN DEFAULT FALSE,
 			created_at TIMESTAMP DEFAULT NOW(),
 			updated_at TIMESTAMP DEFAULT NOW()
 		);
@@ -525,7 +532,8 @@ func CreateProductImagesTable() error {
 		CREATE TABLE IF NOT EXISTS product_images (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			product_id UUID REFERENCES products_sites(id) ON DELETE CASCADE,
-			image_url TEXT
+			image_url TEXT,
+			position INT DEFAULT 0
 		);
 	`
 	_, err := helper.DB.ExecContext(context.Background(), query)
@@ -602,12 +610,81 @@ func CreateContactPagesTable() error {
 	return nil
 }
 
+func CreateProductVariantsTable() error {
+	query := `
+		CREATE TABLE IF NOT EXISTS product_variants (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			product_id UUID REFERENCES products_sites(id) ON DELETE CASCADE,
+			name TEXT,
+			price NUMERIC,
+			stock INT,
+			sku TEXT,
+			created_at TIMESTAMP DEFAULT NOW()
+		);
+	`
+	_, err := helper.DB.ExecContext(context.Background(), query)
+	if err != nil {
+		log.Printf("Error creating product_variants table: %v", err)
+		return err
+	}
+	return nil
+}
+
+func CreateSiteOrdersTable() error {
+	query := `
+		CREATE TABLE IF NOT EXISTS site_orders (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			shop_id UUID REFERENCES shops(id) ON DELETE CASCADE,
+			customer_name TEXT,
+			phone TEXT,
+			email TEXT,
+			address TEXT,
+			city TEXT,
+			pincode TEXT,
+			total_amount NUMERIC,
+			payment_method TEXT,
+			payment_status TEXT,
+			order_status TEXT,
+			created_at TIMESTAMP DEFAULT NOW()
+		);
+	`
+	_, err := helper.DB.ExecContext(context.Background(), query)
+	if err != nil {
+		log.Printf("Error creating site_orders table: %v", err)
+		return err
+	}
+	return nil
+}
+
+func CreateSiteOrderItemsTable() error {
+	query := `
+		CREATE TABLE IF NOT EXISTS site_order_items (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			order_id UUID REFERENCES site_orders(id) ON DELETE CASCADE,
+			product_id UUID,
+			variant_id UUID,
+			product_name TEXT,
+			variant_name TEXT,
+			price NUMERIC,
+			quantity INT
+		);
+	`
+	_, err := helper.DB.ExecContext(context.Background(), query)
+	if err != nil {
+		log.Printf("Error creating site_order_items table: %v", err)
+		return err
+	}
+	return nil
+}
+
 // CreateSitesIndexes creates indexes for performance
 func CreateSitesIndexes() error {
 	indexes := []string{
 		`CREATE INDEX IF NOT EXISTS idx_shops_subdomain ON shops(subdomain)`,
 		`CREATE INDEX IF NOT EXISTS idx_shops_custom_domain ON shops(custom_domain)`,
 		`CREATE INDEX IF NOT EXISTS idx_products_sites_shop_id ON products_sites(shop_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_product_variants_product_id ON product_variants(product_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_site_orders_shop_id ON site_orders(shop_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_categories_shop_id ON categories(shop_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_testimonials_shop_id ON testimonials(shop_id)`,
 	}
@@ -628,8 +705,11 @@ func CreateSitesTables() {
 	_ = CreateCategoriesTable()
 	_ = CreateProductsSitesTable()
 	_ = CreateProductImagesTable()
+	_ = CreateProductVariantsTable()
 	_ = CreateTestimonialsTable()
 	_ = CreateAboutPagesTable()
 	_ = CreateContactPagesTable()
+	_ = CreateSiteOrdersTable()
+	_ = CreateSiteOrderItemsTable()
 	_ = CreateSitesIndexes()
 }

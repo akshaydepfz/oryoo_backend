@@ -126,15 +126,15 @@ func CreateDefaultSiteContent(shopID string) error {
 // createDefaultSiteContentTx inserts default content within a transaction.
 // Caller must verify shop exists and no duplicate data before calling.
 func createDefaultSiteContentTx(ctx context.Context, tx *sql.Tx, shopID string) error {
-	// site_configs - full defaults per spec
+	// site_configs - full defaults per spec (payment_enabled false, no Razorpay keys in dummy)
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO site_configs (shop_id, shop_name, tagline, hero_image_url, hero_title, hero_subtitle,
 			primary_color, secondary_color, phone_number, whatsapp_number, email,
-			facebook_url, instagram_url, twitter_url)
+			facebook_url, instagram_url, twitter_url, payment_enabled)
 		VALUES ($1, 'Your Store', 'Premium products crafted with care',
 			'https://source.unsplash.com/1600x900/?jewelry', 'Discover Timeless Elegance', 'Luxury collections for every occasion',
 			'#CBA135', '#111111', '+91 99999 99999', '919999999999', 'hello@example.com',
-			'https://facebook.com', 'https://instagram.com', 'https://twitter.com')
+			'https://facebook.com', 'https://instagram.com', 'https://twitter.com', false)
 	`, shopID)
 	if err != nil {
 		return fmt.Errorf("site_configs: %w", err)
@@ -188,11 +188,52 @@ func createDefaultSiteContentTx(ctx context.Context, tx *sql.Tx, shopID string) 
 		if err != nil {
 			return fmt.Errorf("products_sites: %w", err)
 		}
-		for _, url := range p.images {
-			_, err = tx.ExecContext(ctx, `INSERT INTO product_images (product_id, image_url) VALUES ($1, $2)`, p.id, url)
+		for pos, url := range p.images {
+			_, err = tx.ExecContext(ctx, `INSERT INTO product_images (product_id, image_url, position) VALUES ($1, $2, $3)`, p.id, url, pos)
 			if err != nil {
 				return fmt.Errorf("product_images: %w", err)
 			}
+		}
+	}
+
+	// product_variants - dummy S, M, L, XL for first 2 products
+	variantSizes := []struct {
+		name  string
+		price float64
+		stock int
+		sku   string
+	}{
+		{"S", 24999.00, 10, "RING-S"},
+		{"M", 25999.00, 15, "RING-M"},
+		{"L", 26999.00, 12, "RING-L"},
+		{"XL", 27999.00, 8, "RING-XL"},
+	}
+	for _, v := range variantSizes {
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO product_variants (id, product_id, name, price, stock, sku)
+			VALUES ($1, $2, $3, $4, $5, $6)
+		`, uuid.New().String(), products[0].id, v.name, v.price, v.stock, v.sku)
+		if err != nil {
+			return fmt.Errorf("product_variants: %w", err)
+		}
+	}
+	necklaceVariants := []struct {
+		name  string
+		price float64
+		stock int
+		sku   string
+	}{
+		{"S", 18999.00, 5, "NECK-S"},
+		{"M", 19499.00, 8, "NECK-M"},
+		{"L", 19999.00, 6, "NECK-L"},
+	}
+	for _, v := range necklaceVariants {
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO product_variants (id, product_id, name, price, stock, sku)
+			VALUES ($1, $2, $3, $4, $5, $6)
+		`, uuid.New().String(), products[1].id, v.name, v.price, v.stock, v.sku)
+		if err != nil {
+			return fmt.Errorf("product_variants: %w", err)
 		}
 	}
 
@@ -511,6 +552,10 @@ func GetSiteProductsByShopID(shopID string) ([]models.SiteProduct, error) {
 		for _, img := range imgs {
 			p.Images = append(p.Images, img.ImageURL)
 		}
+		variants, _ := GetProductVariantsByProduct(p.ID)
+		if len(variants) > 0 {
+			p.Variants = variants
+		}
 		list = append(list, p)
 	}
 	return list, nil
@@ -531,13 +576,17 @@ func GetSiteProductByID(id, shopID string) (*models.SiteProduct, error) {
 	for _, img := range imgs {
 		p.Images = append(p.Images, img.ImageURL)
 	}
+	variants, _ := GetProductVariantsByProduct(p.ID)
+	if len(variants) > 0 {
+		p.Variants = variants
+	}
 	return &p, nil
 }
 
 // GetProductImagesByProductID returns images for a product
 func GetProductImagesByProductID(productID string) ([]models.ProductImage, error) {
 	rows, err := DB.QueryContext(context.Background(),
-		`SELECT id, product_id, image_url, created_at FROM product_images WHERE product_id = $1 ORDER BY created_at`,
+		`SELECT id, product_id, image_url, COALESCE(position, 0) AS position, created_at FROM product_images WHERE product_id = $1 ORDER BY position, created_at`,
 		productID)
 	if err != nil {
 		return nil, err
@@ -546,7 +595,7 @@ func GetProductImagesByProductID(productID string) ([]models.ProductImage, error
 	var list []models.ProductImage
 	for rows.Next() {
 		var img models.ProductImage
-		if err := rows.Scan(&img.ID, &img.ProductID, &img.ImageURL, &img.CreatedAt); err != nil {
+		if err := rows.Scan(&img.ID, &img.ProductID, &img.ImageURL, &img.Position, &img.CreatedAt); err != nil {
 			return nil, err
 		}
 		list = append(list, img)
@@ -581,6 +630,331 @@ func InsertProductImage(productID, imageURL string) error {
 	query := `INSERT INTO product_images (product_id, image_url) VALUES ($1, $2)`
 	_, err := DB.ExecContext(context.Background(), query, productID, imageURL)
 	return err
+}
+
+// --- Product Variants ---
+
+// CreateProductVariant creates a new product variant
+func CreateProductVariant(req models.CreateProductVariantRequest) (*models.ProductVariant, error) {
+	id := uuid.New().String()
+	query := `
+		INSERT INTO product_variants (id, product_id, name, price, stock, sku)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, product_id, name, price, stock, sku, created_at
+	`
+	var v models.ProductVariant
+	err := DB.QueryRowContext(context.Background(), query,
+		id, req.ProductID, req.Name, req.Price, req.Stock, req.SKU,
+	).Scan(&v.ID, &v.ProductID, &v.Name, &v.Price, &v.Stock, &v.SKU, &v.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+// GetProductVariantsByProduct returns variants for a product
+func GetProductVariantsByProduct(productID string) ([]models.ProductVariant, error) {
+	rows, err := DB.QueryContext(context.Background(),
+		`SELECT id, product_id, name, price, stock, sku, created_at FROM product_variants WHERE product_id = $1 ORDER BY created_at`,
+		productID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var list []models.ProductVariant
+	for rows.Next() {
+		var v models.ProductVariant
+		if err := rows.Scan(&v.ID, &v.ProductID, &v.Name, &v.Price, &v.Stock, &v.SKU, &v.CreatedAt); err != nil {
+			return nil, err
+		}
+		list = append(list, v)
+	}
+	return list, nil
+}
+
+// GetProductVariantByID returns a single variant by id
+func GetProductVariantByID(id string) (*models.ProductVariant, error) {
+	var v models.ProductVariant
+	err := DB.QueryRowContext(context.Background(),
+		`SELECT id, product_id, name, price, stock, sku, created_at FROM product_variants WHERE id = $1`,
+		id,
+	).Scan(&v.ID, &v.ProductID, &v.Name, &v.Price, &v.Stock, &v.SKU, &v.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+// UpdateProductVariant updates an existing product variant
+func UpdateProductVariant(id string, req models.UpdateProductVariantRequest) (*models.ProductVariant, error) {
+	query := `
+		UPDATE product_variants
+		SET name = $1, price = $2, stock = $3, sku = $4
+		WHERE id = $5
+		RETURNING id, product_id, name, price, stock, sku, created_at
+	`
+	var v models.ProductVariant
+	err := DB.QueryRowContext(context.Background(), query,
+		req.Name, req.Price, req.Stock, req.SKU, id,
+	).Scan(&v.ID, &v.ProductID, &v.Name, &v.Price, &v.Stock, &v.SKU, &v.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+// DeleteProductVariant deletes a product variant
+func DeleteProductVariant(id string) error {
+	result, err := DB.ExecContext(context.Background(),
+		`DELETE FROM product_variants WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("variant not found")
+	}
+	return nil
+}
+
+// VerifyProductOwnership ensures the given product belongs to a shop owned by the user
+func VerifyProductOwnership(productID string, ownerID int) error {
+	var dummy int
+	err := DB.QueryRowContext(context.Background(), `
+		SELECT 1
+		FROM products_sites p
+		JOIN shops s ON p.shop_id = s.id
+		WHERE p.id = $1 AND s.owner_id = $2
+	`, productID, ownerID).Scan(&dummy)
+	if err != nil {
+		return fmt.Errorf("product not found or access denied")
+	}
+	return nil
+}
+
+// --- Payment Config ---
+
+// GetPaymentConfigByShopID returns payment configuration for a shop
+func GetPaymentConfigByShopID(shopID string) (*models.PaymentConfigResponse, error) {
+	var paymentEnabled bool
+	var razorpayKeyID *string
+	err := DB.QueryRowContext(context.Background(),
+		`SELECT COALESCE(payment_enabled, false) AS payment_enabled, razorpay_key_id FROM site_configs WHERE shop_id = $1`,
+		shopID,
+	).Scan(&paymentEnabled, &razorpayKeyID)
+	if err != nil {
+		return nil, err
+	}
+	return &models.PaymentConfigResponse{
+		PaymentEnabled: paymentEnabled,
+		RazorpayKey:    razorpayKeyID,
+	}, nil
+}
+
+// --- Site Orders ---
+
+// CreateSiteOrder creates an order and its items in a transaction
+func CreateSiteOrder(req models.CreateSiteOrderRequest) (*models.CreateSiteOrderResponse, error) {
+	if len(req.Items) == 0 {
+		return nil, fmt.Errorf("at least one item is required")
+	}
+
+	if req.PaymentMethod != "COD" && req.PaymentMethod != "RAZORPAY" {
+		return nil, fmt.Errorf("invalid payment_method")
+	}
+
+	// Validate shop exists
+	var shopExists bool
+	if err := DB.QueryRowContext(context.Background(), `SELECT EXISTS(SELECT 1 FROM shops WHERE id = $1)`, req.ShopID).Scan(&shopExists); err != nil {
+		return nil, fmt.Errorf("check shop exists: %w", err)
+	}
+	if !shopExists {
+		return nil, fmt.Errorf("shop does not exist")
+	}
+
+	tx, err := DB.BeginTx(context.Background(), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	totalAmount := 0.0
+
+	for _, item := range req.Items {
+		if item.Quantity <= 0 {
+			return nil, fmt.Errorf("quantity must be positive")
+		}
+		var price float64
+		// Fetch product price scoped by shop
+		var productName string
+		err := tx.QueryRowContext(context.Background(), `
+			SELECT name, price FROM products_sites WHERE id = $1 AND shop_id = $2
+		`, item.ProductID, req.ShopID).Scan(&productName, &price)
+		if err != nil {
+			return nil, fmt.Errorf("product not found")
+		}
+
+		var variantName *string
+		if item.VariantID != nil && *item.VariantID != "" {
+			var vPrice float64
+			err = tx.QueryRowContext(context.Background(), `
+				SELECT name, price FROM product_variants WHERE id = $1 AND product_id = $2
+			`, *item.VariantID, item.ProductID).Scan(&variantName, &vPrice)
+			if err != nil {
+				return nil, fmt.Errorf("variant not found")
+			}
+			price = vPrice
+		}
+
+		totalAmount += price * float64(item.Quantity)
+
+		// We'll insert order items after inserting the order (once we have order_id)
+		_ = productName
+		_ = variantName
+	}
+
+	orderID := uuid.New().String()
+	paymentStatus := "pending"
+	orderStatus := "placed"
+
+	_, err = tx.ExecContext(context.Background(), `
+		INSERT INTO site_orders (id, shop_id, customer_name, phone, email, address, city, pincode, total_amount, payment_method, payment_status, order_status)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+	`, orderID, req.ShopID, req.CustomerName, req.Phone, req.Email, req.Address, req.City, req.Pincode,
+		totalAmount, req.PaymentMethod, paymentStatus, orderStatus)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, item := range req.Items {
+		var price float64
+		var productName string
+		err := tx.QueryRowContext(context.Background(), `
+			SELECT name, price FROM products_sites WHERE id = $1 AND shop_id = $2
+		`, item.ProductID, req.ShopID).Scan(&productName, &price)
+		if err != nil {
+			return nil, fmt.Errorf("product not found")
+		}
+
+		var variantName *string
+		if item.VariantID != nil && *item.VariantID != "" {
+			var vPrice float64
+			err = tx.QueryRowContext(context.Background(), `
+				SELECT name, price FROM product_variants WHERE id = $1 AND product_id = $2
+			`, *item.VariantID, item.ProductID).Scan(&variantName, &vPrice)
+			if err != nil {
+				return nil, fmt.Errorf("variant not found")
+			}
+			price = vPrice
+		}
+
+		itemID := uuid.New().String()
+		_, err = tx.ExecContext(context.Background(), `
+			INSERT INTO site_order_items (id, order_id, product_id, variant_id, product_name, variant_name, price, quantity)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`, itemID, orderID, item.ProductID, item.VariantID, productName, variantName, price, item.Quantity)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return &models.CreateSiteOrderResponse{
+		OrderID: orderID,
+		Amount:  totalAmount,
+	}, nil
+}
+
+// GetSiteOrdersByShopID returns orders for a shop
+func GetSiteOrdersByShopID(shopID string) ([]models.SiteOrder, error) {
+	rows, err := DB.QueryContext(context.Background(), `
+		SELECT id, shop_id, customer_name, phone, email, address, city, pincode,
+		       total_amount, payment_method, payment_status, order_status, created_at
+		FROM site_orders
+		WHERE shop_id = $1
+		ORDER BY created_at DESC
+	`, shopID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []models.SiteOrder
+	for rows.Next() {
+		var o models.SiteOrder
+		if err := rows.Scan(&o.ID, &o.ShopID, &o.CustomerName, &o.Phone, &o.Email, &o.Address, &o.City, &o.Pincode,
+			&o.TotalAmount, &o.PaymentMethod, &o.PaymentStatus, &o.OrderStatus, &o.CreatedAt); err != nil {
+			return nil, err
+		}
+		list = append(list, o)
+	}
+	return list, nil
+}
+
+// GetSiteOrderByID returns a single order with its items
+func GetSiteOrderByID(id string) (*models.SiteOrder, error) {
+	var o models.SiteOrder
+	err := DB.QueryRowContext(context.Background(), `
+		SELECT id, shop_id, customer_name, phone, email, address, city, pincode,
+		       total_amount, payment_method, payment_status, order_status, created_at
+		FROM site_orders
+		WHERE id = $1
+	`, id).Scan(&o.ID, &o.ShopID, &o.CustomerName, &o.Phone, &o.Email, &o.Address, &o.City, &o.Pincode,
+		&o.TotalAmount, &o.PaymentMethod, &o.PaymentStatus, &o.OrderStatus, &o.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	itemsRows, err := DB.QueryContext(context.Background(), `
+		SELECT id, order_id, product_id, variant_id, product_name, variant_name, price, quantity
+		FROM site_order_items
+		WHERE order_id = $1
+	`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer itemsRows.Close()
+
+	for itemsRows.Next() {
+		var it models.SiteOrderItem
+		if err := itemsRows.Scan(&it.ID, &it.OrderID, &it.ProductID, &it.VariantID, &it.ProductName, &it.VariantName, &it.Price, &it.Quantity); err != nil {
+			return nil, err
+		}
+		o.Items = append(o.Items, it)
+	}
+
+	return &o, nil
+}
+
+// UpdateSiteOrderStatus updates the order_status of an order
+func UpdateSiteOrderStatus(id string, status string) (*models.SiteOrder, error) {
+	allowed := map[string]bool{
+		"placed":    true,
+		"confirmed": true,
+		"shipped":   true,
+		"delivered": true,
+		"cancelled": true,
+	}
+	if !allowed[status] {
+		return nil, fmt.Errorf("invalid order_status")
+	}
+
+	var o models.SiteOrder
+	err := DB.QueryRowContext(context.Background(), `
+		UPDATE site_orders
+		SET order_status = $1
+		WHERE id = $2
+		RETURNING id, shop_id, customer_name, phone, email, address, city, pincode,
+		          total_amount, payment_method, payment_status, order_status, created_at
+	`, status, id).Scan(&o.ID, &o.ShopID, &o.CustomerName, &o.Phone, &o.Email, &o.Address, &o.City, &o.Pincode,
+		&o.TotalAmount, &o.PaymentMethod, &o.PaymentStatus, &o.OrderStatus, &o.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &o, nil
 }
 
 // UpdateSiteProduct updates a product and replaces images (scoped by shop_id)
