@@ -586,7 +586,7 @@ func GetSiteProductByID(id, shopID string) (*models.SiteProduct, error) {
 // GetProductImagesByProductID returns images for a product
 func GetProductImagesByProductID(productID string) ([]models.ProductImage, error) {
 	rows, err := DB.QueryContext(context.Background(),
-		`SELECT id, product_id, image_url, COALESCE(position, 0) AS position, created_at FROM product_images WHERE product_id = $1 ORDER BY position, created_at`,
+		`SELECT product_id, image_url, COALESCE(position, 0) AS position, created_at FROM product_images WHERE product_id = $1 ORDER BY position, created_at`,
 		productID)
 	if err != nil {
 		return nil, err
@@ -595,7 +595,7 @@ func GetProductImagesByProductID(productID string) ([]models.ProductImage, error
 	var list []models.ProductImage
 	for rows.Next() {
 		var img models.ProductImage
-		if err := rows.Scan(&img.ID, &img.ProductID, &img.ImageURL, &img.Position, &img.CreatedAt); err != nil {
+		if err := rows.Scan(&img.ProductID, &img.ImageURL, &img.Position, &img.CreatedAt); err != nil {
 			return nil, err
 		}
 		list = append(list, img)
