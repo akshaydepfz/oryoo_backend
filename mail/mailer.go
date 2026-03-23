@@ -2,27 +2,45 @@ package mailer
 
 import (
 	"context"
-	"errors"
+	"os"
+	"sync"
 	"time"
 
 	"github.com/mailgun/mailgun-go/v4"
+)
+
+const (
+	mailgunDomain = "sandbox60dbb62bd7ab4ff5983193ef5186e0e0.mailgun.org"
+	// DefaultFrom authorized send address.
+	DefaultFrom = "Oryoo <hi@oryoo.in>"
+	// AlertTo recipient for internal registration alerts.
+	AlertTo = "hi@oryoo.in"
+)
+
+var (
+	mailgunAPIKey = os.Getenv("MAILGUN_API_KEY")
 )
 
 type MailService struct {
 	mg *mailgun.MailgunImpl
 }
 
-func NewMailService() (*MailService, error) {
-	apiKey := "3b692fc3adf4394dcedc3fffd323183b-e61ae8dd-e3cdc048"
-	domain := "oryoo.in"
+var (
+	mailServiceInstance *MailService
+	mailServiceOnce     sync.Once
+)
 
-	if apiKey == "" || domain == "" {
-		return nil, errors.New("MAILGUN_API_KEY or MAILGUN_DOMAIN not set")
-	}
+func NewMailService() *MailService {
+	mg := mailgun.NewMailgun(mailgunDomain, mailgunAPIKey)
+	return &MailService{mg: mg}
+}
 
-	mg := mailgun.NewMailgun(domain, apiKey)
-
-	return &MailService{mg: mg}, nil
+// GetMailService returns a singleton MailService instance.
+func GetMailService() *MailService {
+	mailServiceOnce.Do(func() {
+		mailServiceInstance = NewMailService()
+	})
+	return mailServiceInstance
 }
 
 func (m *MailService) SendMessage(from, subject, body, to string) (string, string, error) {
@@ -52,5 +70,12 @@ func (m *MailService) SendWelcomeEmail(toEmail, toName string) error {
 	defer cancel()
 
 	_, _, err := m.mg.Send(ctx, message)
+	return err
+}
+
+// SendTestEmail sends a plain-text message (works on sandbox without Mailgun templates).
+func (m *MailService) SendTestEmail(from, to, subject string) error {
+	body := "This is a test message from the Oryoo backend (Mailgun)."
+	_, _, err := m.SendMessage(from, subject, body, to)
 	return err
 }

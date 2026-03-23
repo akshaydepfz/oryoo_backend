@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math/big"
 	"net/http"
 	"strings"
@@ -19,6 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"oryoo.com/helper"
+	"oryoo.com/mail"
 	"oryoo.com/models"
 )
 
@@ -164,6 +166,11 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 		UpdatedDate:   time.Now(),
 	}
 
+	if strings.TrimSpace(user.Email) == "" {
+		http.Error(w, "email is required", http.StatusBadRequest)
+		return
+	}
+
 	err = helper.InsertUser(user)
 	if err != nil {
 		http.Error(w, "Failed to save user: "+err.Error(), http.StatusInternalServerError)
@@ -176,6 +183,27 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 		"user":    user,
 	})
 
+	go SendNewUserAlert(user.Email)
+}
+
+// SendNewUserAlert sends a non-blocking registration alert email.
+// Any send failure is logged and intentionally not propagated.
+func SendNewUserAlert(email string) {
+	mailService := mailer.GetMailService()
+	subject := "🚀 New Oryoo User Registered!"
+	body := fmt.Sprintf(
+		"A new user has registered on Oryoo.\n\nUser Email: %s\nRegistration Timestamp: %s",
+		email,
+		time.Now().Format(time.RFC3339),
+	)
+
+	_, _, err := mailService.SendMessage(mailer.DefaultFrom, subject, body, mailer.AlertTo)
+	if err != nil {
+		log.Printf("new user alert email failed for user %s: %v", email, err)
+		return
+	}
+
+	log.Printf("new user alert email sent successfully for user %s", email)
 }
 
 func GetUserByFirebaseUID(w http.ResponseWriter, r *http.Request) {

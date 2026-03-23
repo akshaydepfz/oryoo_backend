@@ -59,18 +59,11 @@ func main() {
 	http.HandleFunc("/products/", handler.DeleteProductHandler)
 	http.HandleFunc("/products", handler.ProductHandler)
 
-	// mailService := initMailService()
-
-	// err := mailService.SendWelcomeEmail(
-	// 	"akshaypk.dev@gmail.com",
-	// 	"Akshay",
-	// )
-
-	// if err != nil {
-	// 	log.Fatalf("Failed to send welcome email: %v", err)
+	//mailService := mailer.NewMailService()
+	// if err := mailService.SendTestEmail(mailer.DefaultFrom, "hi@oryoo.in", "Oryoo backend Mailgun test"); err != nil {
+	// 	log.Fatalf("mail send: %v", err)
 	// }
-
-	// log.Println("Welcome email sent successfully")
+	//log.Printf("Test email sent to hi@oryoo.in (from %s)", mailer.DefaultFrom)
 
 	log.Println("Starting server on :8080")
 	if err := http.ListenAndServe(":8080", enableCors(adminAuthMiddleware(http.DefaultServeMux))); err != nil {
@@ -119,12 +112,3 @@ func enableCors(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
-
-// func initMailService() *mailer.MailService {
-// 	mailService, err := mailer.NewMailService()
-// 	if err != nil {
-// 		log.Fatalf("Failed to initialize mail service: %v", err)
-// 	}
-
-// 	return mailService
-// }
