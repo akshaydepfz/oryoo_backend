@@ -20,7 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"oryoo.com/helper"
-	"oryoo.com/mail"
+	mailer "oryoo.com/mail"
 	"oryoo.com/models"
 )
 
@@ -595,9 +595,9 @@ func DeletePaymentHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]interface{}{
-		"success":     true,
-		"message":     "Payment deleted successfully",
-		"payment_id":  paymentID,
+		"success":    true,
+		"message":    "Payment deleted successfully",
+		"payment_id": paymentID,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -611,7 +611,7 @@ func GetLatestVersionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	version := models.VersionResponse{
-		Version:     "1.2.0",
+		Version:     "1.2.6",
 		UpdateURL:   "https://play.google.com/store/apps/details?id=com.oryoo.app",
 		IsMandatory: true,
 	}
