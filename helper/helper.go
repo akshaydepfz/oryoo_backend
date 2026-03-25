@@ -137,6 +137,48 @@ func InsertUser(user models.User) error {
 	return err
 }
 
+func UpdateUserByFirebaseUID(user models.User) error {
+	query := `
+		UPDATE users SET
+			phone = $2,
+			name = $3,
+			email = $4,
+			business_name = $5,
+			brand_image = $6,
+			country = $7,
+			state = $8,
+			city = $9,
+			address = $10,
+			pincode = $11,
+			device_id = $12,
+			device_model = $13,
+			app_version = $14,
+			updated_date = $15
+		WHERE firebase_uid = $1
+	`
+
+	_, err := DB.Exec(
+		query,
+		user.FirebaseUID,
+		user.Phone,
+		user.Name,
+		user.Email,
+		user.BusinessName,
+		user.BrandImage,
+		user.Country,
+		user.State,
+		user.City,
+		user.Address,
+		user.Pincode,
+		user.DeviceID,
+		user.DeviceModel,
+		user.AppVersion,
+		user.UpdatedDate,
+	)
+
+	return err
+}
+
 func IncrementUserTotalCustomers(firebaseUID string) error {
 	query := `
 		UPDATE users SET

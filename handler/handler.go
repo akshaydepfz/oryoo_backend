@@ -30,6 +30,7 @@ func UserHandler(w http.ResponseWriter, r *http.Request) {
 	} else if r.Method == http.MethodGet {
 
 	} else if r.Method == http.MethodPut {
+		UpdateUserHandler(w, r)
 
 	} else if r.Method == http.MethodDelete {
 
@@ -37,6 +38,136 @@ func UserHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request method", http.StatusBadRequest)
 	}
 
+}
+
+func UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseMultipartForm(20 << 20)
+	if err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	firebaseUID := strings.TrimSpace(r.FormValue("firebase_uid"))
+	if firebaseUID == "" {
+		firebaseUID = strings.TrimSpace(r.URL.Query().Get("firebase_uid"))
+	}
+	if firebaseUID == "" {
+		http.Error(w, "firebase_uid is required", http.StatusBadRequest)
+		return
+	}
+
+	existingUser, err := helper.GetUserByFirebaseUID(firebaseUID)
+	if err != nil {
+		http.Error(w, "Failed to fetch user: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if strings.TrimSpace(existingUser.FirebaseUID) == "" {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	if v := strings.TrimSpace(r.FormValue("phone")); v != "" {
+		existingUser.Phone = v
+	}
+	if v := strings.TrimSpace(r.FormValue("name")); v != "" {
+		existingUser.Name = v
+	}
+	if v := strings.TrimSpace(r.FormValue("email")); v != "" {
+		existingUser.Email = v
+	}
+	if v := strings.TrimSpace(r.FormValue("business_name")); v != "" {
+		existingUser.BusinessName = v
+	}
+	if v := strings.TrimSpace(r.FormValue("country")); v != "" {
+		existingUser.Country = v
+	}
+	if v := strings.TrimSpace(r.FormValue("state")); v != "" {
+		existingUser.State = v
+	}
+	if v := strings.TrimSpace(r.FormValue("city")); v != "" {
+		existingUser.City = v
+	}
+	if v := strings.TrimSpace(r.FormValue("address")); v != "" {
+		existingUser.Address = v
+	}
+	if v := strings.TrimSpace(r.FormValue("pincode")); v != "" {
+		existingUser.Pincode = v
+	}
+	if v := strings.TrimSpace(r.FormValue("device_id")); v != "" {
+		existingUser.DeviceID = v
+	}
+	if v := strings.TrimSpace(r.FormValue("device_model")); v != "" {
+		existingUser.DeviceModel = v
+	}
+	if v := strings.TrimSpace(r.FormValue("app_version")); v != "" {
+		existingUser.AppVersion = v
+	}
+
+	file, fileHeader, fileErr := r.FormFile("brand_image")
+	if fileErr == nil {
+		defer file.Close()
+
+		fileBytes, err := io.ReadAll(file)
+		if err != nil {
+			http.Error(w, "Failed to read image", http.StatusInternalServerError)
+			return
+		}
+
+		contentType := http.DetectContentType(fileBytes)
+		if !strings.HasPrefix(contentType, "image/") {
+			http.Error(w, "Only image files are allowed", http.StatusBadRequest)
+			return
+		}
+
+		const (
+			s3Bucket  = "oryoo-bucket"
+			s3Region  = "ap-southeast-2"
+			awsKey    = "AKIAYLWS7S6WYP6WYSIA"
+			awsSecret = "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"
+		)
+
+		cfg, err := config.LoadDefaultConfig(context.TODO(),
+			config.WithRegion(s3Region),
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(awsKey, awsSecret, "")),
+		)
+		if err != nil {
+			http.Error(w, "AWS config error", http.StatusInternalServerError)
+			return
+		}
+
+		client := s3.NewFromConfig(cfg)
+		key := fmt.Sprintf("UserBrandImages/%d_%s", time.Now().UnixNano(), fileHeader.Filename)
+
+		_, err = client.PutObject(context.TODO(), &s3.PutObjectInput{
+			Bucket:      aws.String(s3Bucket),
+			Key:         aws.String(key),
+			Body:        bytes.NewReader(fileBytes),
+			ContentType: aws.String(contentType),
+		})
+		if err != nil {
+			http.Error(w, "Image upload failed", http.StatusInternalServerError)
+			return
+		}
+
+		existingUser.BrandImage = fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", s3Bucket, s3Region, key)
+	} else if fileErr != http.ErrMissingFile {
+		http.Error(w, "Invalid brand_image file", http.StatusBadRequest)
+		return
+	}
+
+	existingUser.UpdatedDate = time.Now()
+
+	err = helper.UpdateUserByFirebaseUID(existingUser)
+	if err != nil {
+		http.Error(w, "Failed to update user: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "User updated successfully",
+		"user":    existingUser,
+	})
 }
 
 func GetCustomers(w http.ResponseWriter, r *http.Request) {
