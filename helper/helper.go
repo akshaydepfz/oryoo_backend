@@ -1121,12 +1121,12 @@ func GetAllBillingTransactions() ([]models.BillingTransaction, error) {
 func InsertProduct(product *models.ProductModel) error {
 	query := `
 		INSERT INTO products (
-			name, description, price, sku, added_by,
+			name, description, price, profit, sku, added_by,
 			created_at, updated_at
 		)
 		VALUES (
-			$1, $2, $3, $4, $5,
-			$6, $7
+			$1, $2, $3, $4, $5, $6,
+			$7, $8
 		)
 		RETURNING id
 	`
@@ -1136,6 +1136,7 @@ func InsertProduct(product *models.ProductModel) error {
 		product.Name,
 		product.Description,
 		product.Price,
+		product.Profit,
 		product.SKU,
 		product.AddedBy,
 		product.CreatedAt,
@@ -1154,9 +1155,10 @@ func UpdateProduct(product *models.ProductModel) error {
 			name = $1,
 			description = $2,
 			price = $3,
-			sku = $4,
-			updated_at = $5
-		WHERE id = $6
+			profit = $4,
+			sku = $5,
+			updated_at = $6
+		WHERE id = $7
 	`
 
 	_, err := DB.ExecContext(
@@ -1165,6 +1167,7 @@ func UpdateProduct(product *models.ProductModel) error {
 		product.Name,
 		product.Description,
 		product.Price,
+		product.Profit,
 		product.SKU,
 		product.UpdatedAt,
 		product.ID,
@@ -1195,7 +1198,7 @@ func DeleteProduct(productID string) error {
 
 func GetAllProducts() ([]models.ProductModel, error) {
 	rows, err := DB.Query(`
-		SELECT id, name, description, price, sku, added_by, created_at, updated_at
+		SELECT id, name, description, price, profit, sku, added_by, created_at, updated_at
 		FROM products
 		ORDER BY created_at DESC
 	`)
@@ -1212,6 +1215,7 @@ func GetAllProducts() ([]models.ProductModel, error) {
 			&p.Name,
 			&p.Description,
 			&p.Price,
+			&p.Profit,
 			&p.SKU,
 			&p.AddedBy,
 			&p.CreatedAt,
@@ -1227,7 +1231,7 @@ func GetAllProducts() ([]models.ProductModel, error) {
 
 func GetProductsByCreatedBy(createdBy string) ([]models.ProductModel, error) {
 	rows, err := DB.Query(`
-		SELECT id, name, description, price, sku, added_by, created_at, updated_at
+		SELECT id, name, description, price, profit, sku, added_by, created_at, updated_at
 		FROM products
 		WHERE added_by = $1
 		ORDER BY created_at DESC
@@ -1245,6 +1249,7 @@ func GetProductsByCreatedBy(createdBy string) ([]models.ProductModel, error) {
 			&p.Name,
 			&p.Description,
 			&p.Price,
+			&p.Profit,
 			&p.SKU,
 			&p.AddedBy,
 			&p.CreatedAt,

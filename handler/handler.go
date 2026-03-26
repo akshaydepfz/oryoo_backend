@@ -782,6 +782,7 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 		Name:        req.Name,
 		Description: req.Description,
 		Price:       req.Price,
+		Profit:      req.Profit,
 		SKU:         req.SKU,
 		AddedBy:     req.AddedBy,
 		CreatedAt:   &now,

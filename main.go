@@ -12,7 +12,7 @@ import (
 func main() {
 
 	database.ConnectDatabase()
-	database.CreateSitesTables()
+
 	http.Handle("/users", http.HandlerFunc(handler.UserHandler))
 	http.HandleFunc("/auth/check-phone", handler.CheckPhoneHandler)
 	http.HandleFunc("/auth/register", handler.CreateUserHandler)

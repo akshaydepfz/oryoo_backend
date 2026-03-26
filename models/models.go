@@ -180,6 +180,7 @@ type ProductModel struct {
 	Name        string     `json:"name" db:"name"`
 	Description string     `json:"description" db:"description"`
 	Price       float64    `json:"price" db:"price"`
+	Profit      float64    `json:"profit" db:"profit"`
 	SKU         *string    `json:"sku,omitempty" db:"sku"`
 	AddedBy     string     `json:"added_by" db:"added_by"`
 	CreatedAt   *time.Time `json:"created_at" db:"created_at"`
@@ -190,6 +191,7 @@ type CreateProductRequest struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
 	Price       float64  `json:"price"`
+	Profit      float64  `json:"profit"`
 	SKU         *string  `json:"sku,omitempty"`
 	AddedBy     string   `json:"added_by"`
 }
