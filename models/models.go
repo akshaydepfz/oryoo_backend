@@ -182,6 +182,7 @@ type ProductModel struct {
 	Price       float64    `json:"price" db:"price"`
 	Profit      float64    `json:"profit" db:"profit"`
 	SKU         *string    `json:"sku,omitempty" db:"sku"`
+	ImageURL    *string    `json:"image_url,omitempty" db:"image_url"`
 	AddedBy     string     `json:"added_by" db:"added_by"`
 	CreatedAt   *time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt   *time.Time `json:"updated_at" db:"updated_at"`
@@ -193,6 +194,7 @@ type CreateProductRequest struct {
 	Price       float64  `json:"price"`
 	Profit      float64  `json:"profit"`
 	SKU         *string  `json:"sku,omitempty"`
+	ImageURL    *string  `json:"image_url,omitempty"`
 	AddedBy     string   `json:"added_by"`
 }
 

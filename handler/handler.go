@@ -5,11 +5,13 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"math/big"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -764,7 +766,62 @@ func ProductHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type productImageClientError struct{ msg string }
+
+func (e *productImageClientError) Error() string { return e.msg }
+
+// optionalProductImageFromMultipart reads field "image", compresses it, uploads to S3, and returns the URL.
+// Missing file returns (nil, nil). Other client mistakes return (*productImageClientError).
+func optionalProductImageFromMultipart(r *http.Request) (*string, error) {
+	file, _, err := r.FormFile("image")
+	if err != nil {
+		if errors.Is(err, http.ErrMissingFile) {
+			return nil, nil
+		}
+		return nil, &productImageClientError{msg: "invalid image file"}
+	}
+	defer file.Close()
+
+	fileBytes, err := io.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("read image: %w", err)
+	}
+	contentType := http.DetectContentType(fileBytes)
+	if !strings.HasPrefix(contentType, "image/") {
+		return nil, &productImageClientError{msg: "only image files are allowed"}
+	}
+	compressed, err := helper.CompressProductImage(fileBytes)
+	if err != nil {
+		return nil, &productImageClientError{msg: "invalid or unsupported image"}
+	}
+	name := fmt.Sprintf("%d.jpg", time.Now().UnixNano())
+	url, err := uploadToS3(compressed, name, "image/jpeg", "products/crm")
+	if err != nil {
+		return nil, fmt.Errorf("upload image: %w", err)
+	}
+	return &url, nil
+}
+
+func writeProductImageError(w http.ResponseWriter, err error) bool {
+	if err == nil {
+		return false
+	}
+	var ce *productImageClientError
+	if errors.As(err, &ce) {
+		http.Error(w, ce.msg, http.StatusBadRequest)
+		return true
+	}
+	http.Error(w, err.Error(), http.StatusInternalServerError)
+	return true
+}
+
 func CreateProduct(w http.ResponseWriter, r *http.Request) {
+	ct := strings.ToLower(r.Header.Get("Content-Type"))
+	if strings.HasPrefix(ct, "multipart/form-data") {
+		createProductMultipart(w, r)
+		return
+	}
+
 	var req models.CreateProductRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -784,6 +841,7 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 		Price:       req.Price,
 		Profit:      req.Profit,
 		SKU:         req.SKU,
+		ImageURL:    req.ImageURL,
 		AddedBy:     req.AddedBy,
 		CreatedAt:   &now,
 		UpdatedAt:   &now,
@@ -799,7 +857,69 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(product)
 }
 
+func createProductMultipart(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(20 << 20); err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	name := strings.TrimSpace(r.FormValue("name"))
+	addedBy := strings.TrimSpace(r.FormValue("added_by"))
+	if name == "" || addedBy == "" {
+		http.Error(w, "name and added_by are required", http.StatusBadRequest)
+		return
+	}
+
+	price, err := strconv.ParseFloat(strings.TrimSpace(r.FormValue("price")), 64)
+	if err != nil {
+		http.Error(w, "invalid price", http.StatusBadRequest)
+		return
+	}
+	profit, err := strconv.ParseFloat(strings.TrimSpace(r.FormValue("profit")), 64)
+	if err != nil {
+		http.Error(w, "invalid profit", http.StatusBadRequest)
+		return
+	}
+
+	var sku *string
+	if s := strings.TrimSpace(r.FormValue("sku")); s != "" {
+		sku = &s
+	}
+
+	imgURL, err := optionalProductImageFromMultipart(r)
+	if writeProductImageError(w, err) {
+		return
+	}
+
+	now := time.Now()
+	product := models.ProductModel{
+		Name:        name,
+		Description: strings.TrimSpace(r.FormValue("description")),
+		Price:       price,
+		Profit:      profit,
+		SKU:         sku,
+		ImageURL:    imgURL,
+		AddedBy:     addedBy,
+		CreatedAt:   &now,
+		UpdatedAt:   &now,
+	}
+
+	if err := helper.InsertProduct(&product); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(product)
+}
+
 func UpdateProduct(w http.ResponseWriter, r *http.Request) {
+	ct := strings.ToLower(r.Header.Get("Content-Type"))
+	if strings.HasPrefix(ct, "multipart/form-data") {
+		updateProductMultipart(w, r)
+		return
+	}
+
 	var product models.ProductModel
 
 	if err := json.NewDecoder(r.Body).Decode(&product); err != nil {
@@ -820,6 +940,64 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(product)
+}
+
+func updateProductMultipart(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(20 << 20); err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	id := strings.TrimSpace(r.FormValue("id"))
+	if id == "" {
+		http.Error(w, "Product ID is required", http.StatusBadRequest)
+		return
+	}
+
+	price, err := strconv.ParseFloat(strings.TrimSpace(r.FormValue("price")), 64)
+	if err != nil {
+		http.Error(w, "invalid price", http.StatusBadRequest)
+		return
+	}
+	profit, err := strconv.ParseFloat(strings.TrimSpace(r.FormValue("profit")), 64)
+	if err != nil {
+		http.Error(w, "invalid profit", http.StatusBadRequest)
+		return
+	}
+
+	var sku *string
+	if s := strings.TrimSpace(r.FormValue("sku")); s != "" {
+		sku = &s
+	}
+
+	imgURL, err := optionalProductImageFromMultipart(r)
+	if writeProductImageError(w, err) {
+		return
+	}
+
+	product := models.ProductModel{
+		ID:          id,
+		Name:        strings.TrimSpace(r.FormValue("name")),
+		Description: strings.TrimSpace(r.FormValue("description")),
+		Price:       price,
+		Profit:      profit,
+		SKU:         sku,
+		ImageURL:    imgURL,
+	}
+
+	if err := helper.UpdateProduct(&product); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	updated, err := helper.GetProductByID(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(updated)
 }
 
 func GetProductsByCreatedBy(w http.ResponseWriter, r *http.Request) {

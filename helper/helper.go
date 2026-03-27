@@ -1121,12 +1121,12 @@ func GetAllBillingTransactions() ([]models.BillingTransaction, error) {
 func InsertProduct(product *models.ProductModel) error {
 	query := `
 		INSERT INTO products (
-			name, description, price, profit, sku, added_by,
+			name, description, price, profit, sku, image_url, added_by,
 			created_at, updated_at
 		)
 		VALUES (
-			$1, $2, $3, $4, $5, $6,
-			$7, $8
+			$1, $2, $3, $4, $5, $6, $7,
+			$8, $9
 		)
 		RETURNING id
 	`
@@ -1138,6 +1138,7 @@ func InsertProduct(product *models.ProductModel) error {
 		product.Price,
 		product.Profit,
 		product.SKU,
+		product.ImageURL,
 		product.AddedBy,
 		product.CreatedAt,
 		product.UpdatedAt,
@@ -1157,8 +1158,9 @@ func UpdateProduct(product *models.ProductModel) error {
 			price = $3,
 			profit = $4,
 			sku = $5,
-			updated_at = $6
-		WHERE id = $7
+			updated_at = $6,
+			image_url = COALESCE($7, image_url)
+		WHERE id = $8
 	`
 
 	_, err := DB.ExecContext(
@@ -1170,9 +1172,37 @@ func UpdateProduct(product *models.ProductModel) error {
 		product.Profit,
 		product.SKU,
 		product.UpdatedAt,
+		product.ImageURL,
 		product.ID,
 	)
 	return err
+}
+
+// GetProductByID returns a CRM catalog product by id.
+func GetProductByID(id string) (*models.ProductModel, error) {
+	var p models.ProductModel
+	err := DB.QueryRow(`
+		SELECT id, name, description, price, profit, sku, image_url, added_by, created_at, updated_at
+		FROM products WHERE id = $1
+	`, id).Scan(
+		&p.ID,
+		&p.Name,
+		&p.Description,
+		&p.Price,
+		&p.Profit,
+		&p.SKU,
+		&p.ImageURL,
+		&p.AddedBy,
+		&p.CreatedAt,
+		&p.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("product not found")
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
 }
 
 func DeleteProduct(productID string) error {
@@ -1198,7 +1228,7 @@ func DeleteProduct(productID string) error {
 
 func GetAllProducts() ([]models.ProductModel, error) {
 	rows, err := DB.Query(`
-		SELECT id, name, description, price, profit, sku, added_by, created_at, updated_at
+		SELECT id, name, description, price, profit, sku, image_url, added_by, created_at, updated_at
 		FROM products
 		ORDER BY created_at DESC
 	`)
@@ -1217,6 +1247,7 @@ func GetAllProducts() ([]models.ProductModel, error) {
 			&p.Price,
 			&p.Profit,
 			&p.SKU,
+			&p.ImageURL,
 			&p.AddedBy,
 			&p.CreatedAt,
 			&p.UpdatedAt,
@@ -1231,7 +1262,7 @@ func GetAllProducts() ([]models.ProductModel, error) {
 
 func GetProductsByCreatedBy(createdBy string) ([]models.ProductModel, error) {
 	rows, err := DB.Query(`
-		SELECT id, name, description, price, profit, sku, added_by, created_at, updated_at
+		SELECT id, name, description, price, profit, sku, image_url, added_by, created_at, updated_at
 		FROM products
 		WHERE added_by = $1
 		ORDER BY created_at DESC
@@ -1251,6 +1282,7 @@ func GetProductsByCreatedBy(createdBy string) ([]models.ProductModel, error) {
 			&p.Price,
 			&p.Profit,
 			&p.SKU,
+			&p.ImageURL,
 			&p.AddedBy,
 			&p.CreatedAt,
 			&p.UpdatedAt,

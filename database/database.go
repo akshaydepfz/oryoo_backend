@@ -80,6 +80,9 @@ func runMigrations(db *sql.DB) {
 	if err := AlterProductsTableAddProfit(db); err != nil {
 		log.Printf("Migration products profit: %v", err)
 	}
+	if err := AlterProductsTableAddImageURL(db); err != nil {
+		log.Printf("Migration products image_url: %v", err)
+	}
 }
 
 // RunSitesMigrations adds missing columns for Sites UI. Safe to run on every startup.
@@ -333,6 +336,13 @@ func AddtotalCustomersInUsersTable() error {
 func AlterProductsTableAddProfit(db *sql.DB) error {
 	_, err := db.ExecContext(context.Background(),
 		`ALTER TABLE products ADD COLUMN IF NOT EXISTS profit DOUBLE PRECISION NOT NULL DEFAULT 0;`)
+	return err
+}
+
+// AlterProductsTableAddImageURL adds optional product image URL. Idempotent.
+func AlterProductsTableAddImageURL(db *sql.DB) error {
+	_, err := db.ExecContext(context.Background(),
+		`ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT;`)
 	return err
 }
 
