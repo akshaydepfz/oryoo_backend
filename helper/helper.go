@@ -19,7 +19,7 @@ func GetUsers() ([]models.User, error) {
 		SELECT 
 			id, firebase_uid, phone, name, email, business_name,
 			brand_image,
-			country, state, city, address, pincode, total_customers,
+			country, state, city, address, pincode, total_customers, product_count,
 			last_login, last_active,
 			device_id, device_model, app_version,
 			is_premium, plan_name, plan_expiry,
@@ -51,6 +51,7 @@ func GetUsers() ([]models.User, error) {
 			&user.Address,
 			&user.Pincode,
 			&user.TotalCustomers,
+			&user.ProductCount,
 			&user.LastLogin,
 			&user.LastActive,
 			&user.DeviceID,
@@ -183,6 +184,17 @@ func IncrementUserTotalCustomers(firebaseUID string) error {
 	query := `
 		UPDATE users SET
 			total_customers = total_customers + 1
+		WHERE firebase_uid = $1
+	`
+
+	_, err := DB.Exec(query, firebaseUID)
+	return err
+}
+
+func IncrementUserProductCount(firebaseUID string) error {
+	query := `
+		UPDATE users SET
+			product_count = product_count + 1
 		WHERE firebase_uid = $1
 	`
 
@@ -413,7 +425,7 @@ func GetUserByFirebaseUID(firebaseUID string) (models.User, error) {
 		SELECT 
 			id, firebase_uid, phone, name, email, business_name,
 			brand_image,
-			country, state, city, address, pincode, total_customers,
+			country, state, city, address, pincode, total_customers, product_count,
 			last_login, last_active,
 			device_id, device_model, app_version,
 			is_premium, plan_name, plan_expiry,
@@ -443,6 +455,7 @@ func GetUserByFirebaseUID(firebaseUID string) (models.User, error) {
 			&user.Address,
 			&user.Pincode,
 			&user.TotalCustomers,
+			&user.ProductCount,
 			&user.LastLogin,
 			&user.LastActive,
 			&user.DeviceID,
@@ -1144,7 +1157,18 @@ func InsertProduct(product *models.ProductModel) error {
 		product.UpdatedAt,
 	).Scan(&product.ID)
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	if product.AddedBy != "" {
+		if err := IncrementUserProductCount(product.AddedBy); err != nil {
+			log.Printf("Failed to increment product_count for user %s: %v", product.AddedBy, err)
+			return fmt.Errorf("product created but failed to update user product_count: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func UpdateProduct(product *models.ProductModel) error {

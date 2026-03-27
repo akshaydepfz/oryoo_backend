@@ -20,6 +20,7 @@ type User struct {
 	Address        string `json:"address"`
 	Pincode        string `json:"pincode"`
 	TotalCustomers int    `json:"total_customers"`
+	ProductCount   int    `json:"product_count"`
 
 	LastLogin  time.Time `json:"last_login"`
 	LastActive time.Time `json:"last_active"`

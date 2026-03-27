@@ -83,6 +83,10 @@ func runMigrations(db *sql.DB) {
 	if err := AlterProductsTableAddImageURL(db); err != nil {
 		log.Printf("Migration products image_url: %v", err)
 	}
+	if _, err := db.ExecContext(context.Background(),
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS product_count INTEGER NOT NULL DEFAULT 0;`); err != nil {
+		log.Printf("Migration users product_count: %v", err)
+	}
 }
 
 // RunSitesMigrations adds missing columns for Sites UI. Safe to run on every startup.
@@ -133,6 +137,7 @@ func CreateUsersTable() error {
 			address TEXT,
 			pincode TEXT,
 			total_customers INTEGER NOT NULL DEFAULT 0,
+			product_count INTEGER NOT NULL DEFAULT 0,
 			last_login TIMESTAMP,
 			last_active TIMESTAMP,
 			device_id TEXT,
