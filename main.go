@@ -14,6 +14,7 @@ func main() {
 	database.ConnectDatabase()
 
 	http.Handle("/users", http.HandlerFunc(handler.UserHandler))
+	http.HandleFunc("/api/user/update-activity", handler.UpdateUserActivityHandler)
 	http.HandleFunc("/auth/check-phone", handler.CheckPhoneHandler)
 	http.HandleFunc("/auth/register", handler.CreateUserHandler)
 	http.HandleFunc("/clients", handler.ClientHandler)

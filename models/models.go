@@ -29,6 +29,9 @@ type User struct {
 	DeviceModel string `json:"device_model"`
 	AppVersion  string `json:"app_version"`
 
+	FCMToken *string    `json:"fcm_token"`
+	LastOpen *time.Time `json:"last_open"`
+
 	IsPremium  bool      `json:"is_premium"`
 	PlanName   string    `json:"plan_name"`
 	PlanExpiry time.Time `json:"plan_expiry"`
@@ -41,6 +44,33 @@ type User struct {
 
 	CreatedDate time.Time `json:"created_date"`
 	UpdatedDate time.Time `json:"updated_date"`
+}
+
+// UpdateUserPartialRequest is for JSON PUT /users: only non-nil fields are applied (backward compatible).
+type UpdateUserPartialRequest struct {
+	FirebaseUID *string `json:"firebase_uid"`
+
+	Phone        *string    `json:"phone"`
+	Name         *string    `json:"name"`
+	Email        *string    `json:"email"`
+	BusinessName *string    `json:"business_name"`
+	Country      *string    `json:"country"`
+	State        *string    `json:"state"`
+	City         *string    `json:"city"`
+	Address      *string    `json:"address"`
+	Pincode      *string    `json:"pincode"`
+	DeviceID     *string    `json:"device_id"`
+	DeviceModel  *string    `json:"device_model"`
+	AppVersion   *string    `json:"app_version"`
+
+	FCMToken *string    `json:"fcm_token"`
+	LastOpen *time.Time `json:"last_open"`
+}
+
+// UpdateUserActivityRequest is for POST /api/user/update-activity. user_id is the firebase_uid.
+type UpdateUserActivityRequest struct {
+	UserID   string  `json:"user_id"`
+	FCMToken *string `json:"fcm_token"`
 }
 
 type CheckPhoneRequest struct {

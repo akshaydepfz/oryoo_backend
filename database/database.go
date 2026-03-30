@@ -87,6 +87,14 @@ func runMigrations(db *sql.DB) {
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS product_count INTEGER NOT NULL DEFAULT 0;`); err != nil {
 		log.Printf("Migration users product_count: %v", err)
 	}
+	if _, err := db.ExecContext(context.Background(),
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS fcm_token TEXT;`); err != nil {
+		log.Printf("Migration users fcm_token: %v", err)
+	}
+	if _, err := db.ExecContext(context.Background(),
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_open TIMESTAMP;`); err != nil {
+		log.Printf("Migration users last_open: %v", err)
+	}
 }
 
 // RunSitesMigrations adds missing columns for Sites UI. Safe to run on every startup.
@@ -150,6 +158,8 @@ func CreateUsersTable() error {
 			account_status TEXT NOT NULL DEFAULT 'active',
 			referral_code TEXT,
 			referred_by TEXT,
+			fcm_token TEXT,
+			last_open TIMESTAMP,
 			created_date TIMESTAMP DEFAULT NOW(),
 			updated_date TIMESTAMP DEFAULT NOW()
 		);

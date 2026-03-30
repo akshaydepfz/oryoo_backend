@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,6 +15,55 @@ import (
 
 var DB *sql.DB
 
+func scanUserRow(scanner interface{ Scan(dest ...any) error }, user *models.User) error {
+	var fcm sql.NullString
+	var lastOpen sql.NullTime
+	err := scanner.Scan(
+		&user.ID,
+		&user.FirebaseUID,
+		&user.Phone,
+		&user.Name,
+		&user.Email,
+		&user.BusinessName,
+		&user.BrandImage,
+		&user.Country,
+		&user.State,
+		&user.City,
+		&user.Address,
+		&user.Pincode,
+		&user.TotalCustomers,
+		&user.ProductCount,
+		&user.LastLogin,
+		&user.LastActive,
+		&user.DeviceID,
+		&user.DeviceModel,
+		&user.AppVersion,
+		&fcm,
+		&lastOpen,
+		&user.IsPremium,
+		&user.PlanName,
+		&user.PlanExpiry,
+		&user.Rating,
+		&user.AccountStatus,
+		&user.ReferralCode,
+		&user.ReferredBy,
+		&user.CreatedDate,
+		&user.UpdatedDate,
+	)
+	if err != nil {
+		return err
+	}
+	if fcm.Valid {
+		s := fcm.String
+		user.FCMToken = &s
+	}
+	if lastOpen.Valid {
+		t := lastOpen.Time
+		user.LastOpen = &t
+	}
+	return nil
+}
+
 func GetUsers() ([]models.User, error) {
 	rows, err := DB.Query(`
 		SELECT 
@@ -22,6 +72,7 @@ func GetUsers() ([]models.User, error) {
 			country, state, city, address, pincode, total_customers, product_count,
 			last_login, last_active,
 			device_id, device_model, app_version,
+			fcm_token, last_open,
 			is_premium, plan_name, plan_expiry,
 			rating, account_status,
 			referral_code, referred_by,
@@ -37,37 +88,7 @@ func GetUsers() ([]models.User, error) {
 
 	for rows.Next() {
 		var user models.User
-		err := rows.Scan(
-			&user.ID,
-			&user.FirebaseUID,
-			&user.Phone,
-			&user.Name,
-			&user.Email,
-			&user.BusinessName,
-			&user.BrandImage,
-			&user.Country,
-			&user.State,
-			&user.City,
-			&user.Address,
-			&user.Pincode,
-			&user.TotalCustomers,
-			&user.ProductCount,
-			&user.LastLogin,
-			&user.LastActive,
-			&user.DeviceID,
-			&user.DeviceModel,
-			&user.AppVersion,
-			&user.IsPremium,
-			&user.PlanName,
-			&user.PlanExpiry,
-			&user.Rating,
-			&user.AccountStatus,
-			&user.ReferralCode,
-			&user.ReferredBy,
-			&user.CreatedDate,
-			&user.UpdatedDate,
-		)
-		if err != nil {
+		if err := scanUserRow(rows, &user); err != nil {
 			return nil, err
 		}
 		usersList = append(usersList, user)
@@ -107,7 +128,8 @@ func InsertUser(user models.User) error {
 			is_premium, plan_name, plan_expiry,
 			rating, account_status,
 			referral_code, referred_by,
-			created_date, updated_date
+			created_date, updated_date,
+			fcm_token, last_open
 		)
 		VALUES (
 			$1, $2, $3, $4, $5,
@@ -118,7 +140,8 @@ func InsertUser(user models.User) error {
 			$17, $18, $19,
 			$20, $21,
 			$22, $23,
-			$24, $25
+			$24, $25,
+			$26, $27
 		)
 	`
 
@@ -133,6 +156,7 @@ func InsertUser(user models.User) error {
 		user.Rating, user.AccountStatus,
 		user.ReferralCode, user.ReferredBy,
 		user.CreatedDate, user.UpdatedDate,
+		user.FCMToken, user.LastOpen,
 	)
 
 	return err
@@ -154,7 +178,9 @@ func UpdateUserByFirebaseUID(user models.User) error {
 			device_id = $12,
 			device_model = $13,
 			app_version = $14,
-			updated_date = $15
+			fcm_token = $15,
+			last_open = $16,
+			updated_date = $17
 		WHERE firebase_uid = $1
 	`
 
@@ -174,6 +200,8 @@ func UpdateUserByFirebaseUID(user models.User) error {
 		user.DeviceID,
 		user.DeviceModel,
 		user.AppVersion,
+		user.FCMToken,
+		user.LastOpen,
 		user.UpdatedDate,
 	)
 
@@ -428,6 +456,7 @@ func GetUserByFirebaseUID(firebaseUID string) (models.User, error) {
 			country, state, city, address, pincode, total_customers, product_count,
 			last_login, last_active,
 			device_id, device_model, app_version,
+			fcm_token, last_open,
 			is_premium, plan_name, plan_expiry,
 			rating, account_status,
 			referral_code, referred_by,
@@ -441,42 +470,38 @@ func GetUserByFirebaseUID(firebaseUID string) (models.User, error) {
 
 	var user models.User
 	for rows.Next() {
-		err := rows.Scan(
-			&user.ID,
-			&user.FirebaseUID,
-			&user.Phone,
-			&user.Name,
-			&user.Email,
-			&user.BusinessName,
-			&user.BrandImage,
-			&user.Country,
-			&user.State,
-			&user.City,
-			&user.Address,
-			&user.Pincode,
-			&user.TotalCustomers,
-			&user.ProductCount,
-			&user.LastLogin,
-			&user.LastActive,
-			&user.DeviceID,
-			&user.DeviceModel,
-			&user.AppVersion,
-			&user.IsPremium,
-			&user.PlanName,
-			&user.PlanExpiry,
-			&user.Rating,
-			&user.AccountStatus,
-			&user.ReferralCode,
-			&user.ReferredBy,
-			&user.CreatedDate,
-			&user.UpdatedDate,
-		)
-		if err != nil {
+		if err := scanUserRow(rows, &user); err != nil {
 			return models.User{}, err
 		}
 	}
 
 	return user, nil
+}
+
+// UpdateUserActivity sets last_open to now and optionally updates fcm_token when non-empty.
+// userID is firebase_uid. Returns rows affected (0 if no such user).
+func UpdateUserActivity(ctx context.Context, firebaseUID string, fcmToken *string) (int64, error) {
+	now := time.Now()
+	if fcmToken != nil {
+		if tok := strings.TrimSpace(*fcmToken); tok != "" {
+			res, err := DB.ExecContext(ctx, `
+				UPDATE users SET last_open = $1, fcm_token = $2, updated_date = $3
+				WHERE firebase_uid = $4`,
+				now, tok, now, firebaseUID)
+			if err != nil {
+				return 0, err
+			}
+			return res.RowsAffected()
+		}
+	}
+	res, err := DB.ExecContext(ctx, `
+		UPDATE users SET last_open = $1, updated_date = $2
+		WHERE firebase_uid = $3`,
+		now, now, firebaseUID)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
 
 func InsertOrder(orderID, orderNumber string, req models.CreateOrderRequest) error {

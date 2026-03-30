@@ -42,7 +42,90 @@ func UserHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func applyPartialUserUpdate(existing *models.User, req *models.UpdateUserPartialRequest) {
+	if req == nil {
+		return
+	}
+	applyNonEmptyString := func(dst *string, src *string) {
+		if src == nil {
+			return
+		}
+		if v := strings.TrimSpace(*src); v != "" {
+			*dst = v
+		}
+	}
+	applyNonEmptyString(&existing.Phone, req.Phone)
+	applyNonEmptyString(&existing.Name, req.Name)
+	applyNonEmptyString(&existing.Email, req.Email)
+	applyNonEmptyString(&existing.BusinessName, req.BusinessName)
+	applyNonEmptyString(&existing.Country, req.Country)
+	applyNonEmptyString(&existing.State, req.State)
+	applyNonEmptyString(&existing.City, req.City)
+	applyNonEmptyString(&existing.Address, req.Address)
+	applyNonEmptyString(&existing.Pincode, req.Pincode)
+	applyNonEmptyString(&existing.DeviceID, req.DeviceID)
+	applyNonEmptyString(&existing.DeviceModel, req.DeviceModel)
+	applyNonEmptyString(&existing.AppVersion, req.AppVersion)
+
+	if req.FCMToken != nil && strings.TrimSpace(*req.FCMToken) != "" {
+		v := strings.TrimSpace(*req.FCMToken)
+		existing.FCMToken = &v
+	}
+	if req.LastOpen != nil {
+		t := *req.LastOpen
+		existing.LastOpen = &t
+	}
+}
+
+func updateUserJSON(w http.ResponseWriter, r *http.Request) {
+	var req models.UpdateUserPartialRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	firebaseUID := strings.TrimSpace(r.URL.Query().Get("firebase_uid"))
+	if firebaseUID == "" && req.FirebaseUID != nil {
+		firebaseUID = strings.TrimSpace(*req.FirebaseUID)
+	}
+	if firebaseUID == "" {
+		http.Error(w, "firebase_uid is required (query or JSON body)", http.StatusBadRequest)
+		return
+	}
+
+	existingUser, err := helper.GetUserByFirebaseUID(firebaseUID)
+	if err != nil {
+		http.Error(w, "Failed to fetch user: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if strings.TrimSpace(existingUser.FirebaseUID) == "" {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	applyPartialUserUpdate(&existingUser, &req)
+	existingUser.UpdatedDate = time.Now()
+
+	err = helper.UpdateUserByFirebaseUID(existingUser)
+	if err != nil {
+		http.Error(w, "Failed to update user: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "User updated successfully",
+		"user":    existingUser,
+	})
+}
+
 func UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
+	ct := strings.ToLower(r.Header.Get("Content-Type"))
+	if strings.HasPrefix(ct, "application/json") {
+		updateUserJSON(w, r)
+		return
+	}
+
 	err := r.ParseMultipartForm(20 << 20)
 	if err != nil {
 		http.Error(w, "Invalid form data", http.StatusBadRequest)
@@ -103,6 +186,17 @@ func UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if v := strings.TrimSpace(r.FormValue("app_version")); v != "" {
 		existingUser.AppVersion = v
+	}
+	if v := strings.TrimSpace(r.FormValue("fcm_token")); v != "" {
+		existingUser.FCMToken = &v
+	}
+	if v := strings.TrimSpace(r.FormValue("last_open")); v != "" {
+		t, perr := time.Parse(time.RFC3339, v)
+		if perr != nil {
+			http.Error(w, "invalid last_open: use RFC3339 timestamp", http.StatusBadRequest)
+			return
+		}
+		existingUser.LastOpen = &t
 	}
 
 	file, fileHeader, fileErr := r.FormFile("brand_image")
@@ -299,6 +393,18 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 		UpdatedDate:   time.Now(),
 	}
 
+	if v := strings.TrimSpace(r.FormValue("fcm_token")); v != "" {
+		user.FCMToken = &v
+	}
+	if v := strings.TrimSpace(r.FormValue("last_open")); v != "" {
+		t, perr := time.Parse(time.RFC3339, v)
+		if perr != nil {
+			http.Error(w, "invalid last_open: use RFC3339 timestamp", http.StatusBadRequest)
+			return
+		}
+		user.LastOpen = &t
+	}
+
 	if strings.TrimSpace(user.Email) == "" {
 		http.Error(w, "email is required", http.StatusBadRequest)
 		return
@@ -349,6 +455,42 @@ func GetUserByFirebaseUID(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
+}
+
+// UpdateUserActivityHandler handles POST /api/user/update-activity (user_id = firebase_uid).
+func UpdateUserActivityHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req models.UpdateUserActivityRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	userID := strings.TrimSpace(req.UserID)
+	if userID == "" {
+		http.Error(w, "user_id is required", http.StatusBadRequest)
+		return
+	}
+
+	n, err := helper.UpdateUserActivity(r.Context(), userID, req.FCMToken)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if n == 0 {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "activity updated",
+	})
 }
 
 func ClientHandler(w http.ResponseWriter, r *http.Request) {
