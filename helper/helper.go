@@ -18,6 +18,7 @@ var DB *sql.DB
 func scanUserRow(scanner interface{ Scan(dest ...any) error }, user *models.User) error {
 	var fcm sql.NullString
 	var lastOpen sql.NullTime
+	var purchasedAt sql.NullTime
 	err := scanner.Scan(
 		&user.ID,
 		&user.FirebaseUID,
@@ -49,6 +50,7 @@ func scanUserRow(scanner interface{ Scan(dest ...any) error }, user *models.User
 		&user.ReferredBy,
 		&user.CreatedDate,
 		&user.UpdatedDate,
+		&purchasedAt,
 	)
 	if err != nil {
 		return err
@@ -60,6 +62,10 @@ func scanUserRow(scanner interface{ Scan(dest ...any) error }, user *models.User
 	if lastOpen.Valid {
 		t := lastOpen.Time
 		user.LastOpen = &t
+	}
+	if purchasedAt.Valid {
+		t := purchasedAt.Time
+		user.PurchasedAt = &t
 	}
 	return nil
 }
@@ -76,7 +82,8 @@ func GetUsers() ([]models.User, error) {
 			is_premium, plan_name, plan_expiry,
 			rating, account_status,
 			referral_code, referred_by,
-			created_date, updated_date
+			created_date, updated_date,
+			purchased_at
 		FROM users
 	`)
 	if err != nil {
@@ -460,7 +467,8 @@ func GetUserByFirebaseUID(firebaseUID string) (models.User, error) {
 			is_premium, plan_name, plan_expiry,
 			rating, account_status,
 			referral_code, referred_by,
-			created_date, updated_date
+			created_date, updated_date,
+			purchased_at
 		FROM users WHERE firebase_uid = $1
 	`, firebaseUID)
 	if err != nil {

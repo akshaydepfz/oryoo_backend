@@ -36,6 +36,8 @@ type User struct {
 	PlanName   string    `json:"plan_name"`
 	PlanExpiry time.Time `json:"plan_expiry"`
 
+	PurchasedAt *time.Time `json:"purchased_at,omitempty"`
+
 	Rating        float32 `json:"rating"`
 	AccountStatus string  `json:"account_status"`
 
@@ -44,6 +46,10 @@ type User struct {
 
 	CreatedDate time.Time `json:"created_date"`
 	UpdatedDate time.Time `json:"updated_date"`
+}
+
+func IsPremium(user User) bool {
+	return user.PurchasedAt != nil
 }
 
 // UpdateUserPartialRequest is for JSON PUT /users: only non-nil fields are applied (backward compatible).
