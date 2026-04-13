@@ -405,11 +405,6 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 		user.LastOpen = &t
 	}
 
-	if strings.TrimSpace(user.Email) == "" {
-		http.Error(w, "email is required", http.StatusBadRequest)
-		return
-	}
-
 	err = helper.InsertUser(user)
 	if err != nil {
 		http.Error(w, "Failed to save user: "+err.Error(), http.StatusInternalServerError)
