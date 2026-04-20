@@ -881,7 +881,7 @@ func GetLatestVersionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	version := models.VersionResponse{
-		Version:     "1.2.9",
+		Version:     "1.3.3",
 		UpdateURL:   "https://play.google.com/store/apps/details?id=com.oryoo.app",
 		IsMandatory: true,
 	}
