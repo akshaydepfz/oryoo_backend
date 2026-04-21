@@ -48,6 +48,8 @@ func main() {
 	http.HandleFunc("/sites/admin/categories", handler.SitesAdminCategoriesHandler)
 
 	// Admin - list endpoints
+	http.HandleFunc("/admin/login", handler.AdminLoginHandler)
+	http.HandleFunc("/admin/create-admin", handler.CreateAdminHandler)
 	http.HandleFunc("/admin/customers", handler.AdminGetCustomers)
 	http.HandleFunc("/admin/clients", handler.AdminGetClients)
 	http.HandleFunc("/admin/payments", handler.AdminGetPayments)
@@ -77,6 +79,11 @@ func main() {
 func adminAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/admin/") {
+			if r.URL.Path == "/admin/login" || r.URL.Path == "/admin/create-admin" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			authHeader := r.Header.Get("Authorization")
 			expected := "Bearer 8f3k29df0sdf89sdf98sd7f98sd7f9sd87f"
 
