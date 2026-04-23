@@ -104,13 +104,22 @@ func (r *UserRepo) GetNotificationStates(ctx context.Context, userIDs []string) 
 func (r *UserRepo) UpsertNotificationState(ctx context.Context, userID string, sentAt time.Time, pendingCount int) error {
 	_, err := helper.DB.ExecContext(ctx, `
 		INSERT INTO user_notification_state (user_id, last_sent_at, last_pending_count, ignore_count)
-		VALUES ($1, $2, $3)
+		VALUES ($1, $2, $3, 1)
 		ON CONFLICT (user_id)
 		DO UPDATE SET
 			last_sent_at = EXCLUDED.last_sent_at,
 			last_pending_count = EXCLUDED.last_pending_count,
 			ignore_count = user_notification_state.ignore_count + 1
 	`, userID, sentAt, pendingCount)
+	return err
+}
+
+func (r *UserRepo) ClearFCMToken(ctx context.Context, userID string) error {
+	_, err := helper.DB.ExecContext(ctx, `
+		UPDATE users
+		SET fcm_token = NULL
+		WHERE firebase_uid = $1
+	`, userID)
 	return err
 }
 

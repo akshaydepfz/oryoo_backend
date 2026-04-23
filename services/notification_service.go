@@ -198,7 +198,13 @@ func (s *NotificationService) processBatch(ctx context.Context, users []models.U
 			cooldown = maxDuration(cooldown, getEnvDurationHours("NOTIFICATION_IGNORED_COOLDOWN_HOURS", ignoredCooldown))
 		}
 
-		if !shouldSend(state, totalPending, now, cooldown) {
+		shouldSendNow, skipReason := shouldSend(state, totalPending, now, cooldown)
+		if !shouldSendNow {
+			if skipReason == "cooldown" {
+				log.Printf("skipped بسبب cooldown user=%s total_pending=%d", userID, totalPending)
+			} else if skipReason == "no_change" {
+				log.Printf("skipped بسبب no change user=%s total_pending=%d", userID, totalPending)
+			}
 			continue
 		}
 
@@ -206,10 +212,20 @@ func (s *NotificationService) processBatch(ctx context.Context, users []models.U
 		templateKey, body := buildMessage(pStats, oStats, templatePerformance)
 		if err := s.sendPendingReminder(ctx, token, body, screen); err != nil {
 			log.Printf("fcm send failed user=%s err=%v", userID, err)
+			if isInvalidFCMTokenError(err) {
+				if clearErr := s.userRepo.ClearFCMToken(ctx, userID); clearErr != nil {
+					log.Printf("failed to clear invalid fcm token user=%s err=%v", userID, clearErr)
+				} else {
+					log.Printf("invalid fcm token cleared user=%s", userID)
+				}
+			}
 			continue
 		}
+		log.Printf("notification sent user=%s total_pending=%d", userID, totalPending)
 		if err := s.userRepo.UpsertNotificationState(ctx, userID, now, totalPending); err != nil {
 			log.Printf("notification state upsert failed user=%s err=%v", userID, err)
+		} else {
+			log.Printf("state updated user=%s total_pending=%d", userID, totalPending)
 		}
 		if err := s.userRepo.InsertNotificationLog(ctx, userID, templateKey, body, now); err != nil {
 			log.Printf("notification log insert failed user=%s err=%v", userID, err)
@@ -219,14 +235,17 @@ func (s *NotificationService) processBatch(ctx context.Context, users []models.U
 	return nil
 }
 
-func shouldSend(state models.UserNotificationState, totalPending int, now time.Time, cooldown time.Duration) bool {
+func shouldSend(state models.UserNotificationState, totalPending int, now time.Time, cooldown time.Duration) (bool, string) {
 	if state.LastSentAt == nil {
-		return true
+		return true, ""
 	}
 	if totalPending == state.LastPendingCount {
-		return false
+		return false, "no_change"
 	}
-	return now.Sub(*state.LastSentAt) >= cooldown
+	if now.Sub(*state.LastSentAt) < cooldown {
+		return false, "cooldown"
+	}
+	return true, ""
 }
 
 func (s *NotificationService) sendPendingReminder(ctx context.Context, fcmToken, body, screen string) error {
@@ -495,4 +514,11 @@ func getEnvDurationMinutes(key string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return time.Duration(n) * time.Minute
+}
+
+func isInvalidFCMTokenError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), strings.ToLower("Requested entity was not found"))
 }
