@@ -95,6 +95,71 @@ func runMigrations(db *sql.DB) {
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_open TIMESTAMP;`); err != nil {
 		log.Printf("Migration users last_open: %v", err)
 	}
+	if _, err := db.ExecContext(context.Background(), `
+		CREATE TABLE IF NOT EXISTS user_notification_state (
+			user_id TEXT PRIMARY KEY,
+			last_sent_at TIMESTAMP,
+			last_pending_count INTEGER NOT NULL DEFAULT 0,
+			ignore_count INTEGER NOT NULL DEFAULT 0,
+			last_clicked_at TIMESTAMP
+		);`); err != nil {
+		log.Printf("Migration user_notification_state create: %v", err)
+	}
+	if _, err := db.ExecContext(context.Background(), `
+		ALTER TABLE user_notification_state
+		ADD COLUMN IF NOT EXISTS ignore_count INTEGER NOT NULL DEFAULT 0;`); err != nil {
+		log.Printf("Migration user_notification_state ignore_count: %v", err)
+	}
+	if _, err := db.ExecContext(context.Background(), `
+		ALTER TABLE user_notification_state
+		ADD COLUMN IF NOT EXISTS last_clicked_at TIMESTAMP;`); err != nil {
+		log.Printf("Migration user_notification_state last_clicked_at: %v", err)
+	}
+	if _, err := db.ExecContext(context.Background(), `
+		CREATE TABLE IF NOT EXISTS notification_logs (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			template_key TEXT NOT NULL DEFAULT '',
+			message TEXT NOT NULL,
+			sent_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			clicked BOOLEAN NOT NULL DEFAULT FALSE
+		);`); err != nil {
+		log.Printf("Migration notification_logs create: %v", err)
+	}
+	if _, err := db.ExecContext(context.Background(), `
+		ALTER TABLE notification_logs
+		ADD COLUMN IF NOT EXISTS template_key TEXT NOT NULL DEFAULT '';`); err != nil {
+		log.Printf("Migration notification_logs template_key: %v", err)
+	}
+	if _, err := db.ExecContext(context.Background(), `
+		CREATE INDEX IF NOT EXISTS idx_notification_logs_user_sent_at
+		ON notification_logs (user_id, sent_at DESC);`); err != nil {
+		log.Printf("Migration notification_logs index: %v", err)
+	}
+	if _, err := db.ExecContext(context.Background(), `
+		CREATE INDEX IF NOT EXISTS idx_notification_logs_template_key_sent_at
+		ON notification_logs (template_key, sent_at DESC)
+		WHERE template_key <> '';`); err != nil {
+		log.Printf("Migration notification_logs template index: %v", err)
+	}
+	if _, err := db.ExecContext(context.Background(), `
+		CREATE INDEX IF NOT EXISTS idx_users_fcm_token_non_empty
+		ON users (id)
+		WHERE fcm_token IS NOT NULL AND btrim(fcm_token) <> '';`); err != nil {
+		log.Printf("Migration users fcm token index: %v", err)
+	}
+	if _, err := db.ExecContext(context.Background(), `
+		CREATE INDEX IF NOT EXISTS idx_orders_pending_owner
+		ON orders (COALESCE(NULLIF(created_by, ''), NULLIF(added_by, '')))
+		WHERE COALESCE(NULLIF(LOWER(btrim(payment_status)), ''), 'pending') <> 'paid';`); err != nil {
+		log.Printf("Migration orders pending owner index: %v", err)
+	}
+	if _, err := db.ExecContext(context.Background(), `
+		CREATE INDEX IF NOT EXISTS idx_payments_pending_owner
+		ON payments (COALESCE(NULLIF(created_by, ''), NULLIF(added_by, '')))
+		WHERE COALESCE(NULLIF(LOWER(btrim(status)), ''), 'pending') <> 'paid';`); err != nil {
+		log.Printf("Migration payments pending owner index: %v", err)
+	}
 }
 
 // RunSitesMigrations adds missing columns for Sites UI. Safe to run on every startup.

@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"strings"
 
+	"oryoo.com/cron"
 	"oryoo.com/database"
 	"oryoo.com/handler"
 )
@@ -12,9 +14,11 @@ import (
 func main() {
 
 	database.ConnectDatabase()
+	cron.StartNotificationJob(context.Background())
 
 	http.Handle("/users", http.HandlerFunc(handler.UserHandler))
 	http.HandleFunc("/api/user/update-activity", handler.UpdateUserActivityHandler)
+	http.HandleFunc("/notification/clicked", handler.NotificationClickedHandler)
 	http.HandleFunc("/auth/check-phone", handler.CheckPhoneHandler)
 	http.HandleFunc("/auth/register", handler.CreateUserHandler)
 	http.HandleFunc("/clients", handler.ClientHandler)

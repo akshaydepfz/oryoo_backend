@@ -24,6 +24,7 @@ import (
 	"oryoo.com/helper"
 	mailer "oryoo.com/mail"
 	"oryoo.com/models"
+	"oryoo.com/services"
 )
 
 func UserHandler(w http.ResponseWriter, r *http.Request) {
@@ -485,6 +486,42 @@ func UpdateUserActivityHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"message": "activity updated",
+	})
+}
+
+// NotificationClickedHandler handles POST /notification/clicked and marks engagement.
+func NotificationClickedHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req models.NotificationClickedRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	userID := strings.TrimSpace(req.UserID)
+	if userID == "" {
+		http.Error(w, "user_id is required", http.StatusBadRequest)
+		return
+	}
+
+	svc, err := services.NewNotificationService(r.Context())
+	if err != nil {
+		http.Error(w, "Notification service unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if err := svc.TrackNotificationClicked(r.Context(), userID); err != nil {
+		http.Error(w, "Failed to track click", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "notification click tracked",
 	})
 }
 

@@ -56,18 +56,18 @@ func IsPremium(user User) bool {
 type UpdateUserPartialRequest struct {
 	FirebaseUID *string `json:"firebase_uid"`
 
-	Phone        *string    `json:"phone"`
-	Name         *string    `json:"name"`
-	Email        *string    `json:"email"`
-	BusinessName *string    `json:"business_name"`
-	Country      *string    `json:"country"`
-	State        *string    `json:"state"`
-	City         *string    `json:"city"`
-	Address      *string    `json:"address"`
-	Pincode      *string    `json:"pincode"`
-	DeviceID     *string    `json:"device_id"`
-	DeviceModel  *string    `json:"device_model"`
-	AppVersion   *string    `json:"app_version"`
+	Phone        *string `json:"phone"`
+	Name         *string `json:"name"`
+	Email        *string `json:"email"`
+	BusinessName *string `json:"business_name"`
+	Country      *string `json:"country"`
+	State        *string `json:"state"`
+	City         *string `json:"city"`
+	Address      *string `json:"address"`
+	Pincode      *string `json:"pincode"`
+	DeviceID     *string `json:"device_id"`
+	DeviceModel  *string `json:"device_model"`
+	AppVersion   *string `json:"app_version"`
 
 	FCMToken *string    `json:"fcm_token"`
 	LastOpen *time.Time `json:"last_open"`
@@ -212,6 +212,27 @@ type BillingTransaction struct {
 	CreatedAt         time.Time `json:"created_at" db:"created_at"`
 }
 
+type UserNotificationState struct {
+	UserID           string     `json:"user_id" db:"user_id"`
+	LastSentAt       *time.Time `json:"last_sent_at" db:"last_sent_at"`
+	LastPendingCount int        `json:"last_pending_count" db:"last_pending_count"`
+	IgnoreCount      int        `json:"ignore_count" db:"ignore_count"`
+	LastClickedAt    *time.Time `json:"last_clicked_at" db:"last_clicked_at"`
+}
+
+type NotificationLog struct {
+	ID          string    `json:"id" db:"id"`
+	UserID      string    `json:"user_id" db:"user_id"`
+	TemplateKey string    `json:"template_key" db:"template_key"`
+	Message     string    `json:"message" db:"message"`
+	SentAt      time.Time `json:"sent_at" db:"sent_at"`
+	Clicked     bool      `json:"clicked" db:"clicked"`
+}
+
+type NotificationClickedRequest struct {
+	UserID string `json:"user_id"`
+}
+
 type ProductModel struct {
 	ID          string     `json:"id" db:"id"`
 	Name        string     `json:"name" db:"name"`
@@ -226,13 +247,13 @@ type ProductModel struct {
 }
 
 type CreateProductRequest struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Price       float64  `json:"price"`
-	Profit      float64  `json:"profit"`
-	SKU         *string  `json:"sku,omitempty"`
-	ImageURL    *string  `json:"image_url,omitempty"`
-	AddedBy     string   `json:"added_by"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Price       float64 `json:"price"`
+	Profit      float64 `json:"profit"`
+	SKU         *string `json:"sku,omitempty"`
+	ImageURL    *string `json:"image_url,omitempty"`
+	AddedBy     string  `json:"added_by"`
 }
 
 type DeleteProductRequest struct {
