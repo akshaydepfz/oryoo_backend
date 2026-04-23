@@ -60,6 +60,7 @@ func main() {
 	http.HandleFunc("/admin/orders", handler.AdminGetOrders)
 	http.HandleFunc("/admin/products", handler.AdminGetProducts)
 	http.HandleFunc("/admin/billing-transactions", handler.AdminGetBillingTransactions)
+	http.HandleFunc("/admin/notification-logs", handler.AdminGetNotificationLogs)
 
 	// Products - register specific routes before generic
 	http.HandleFunc("/products/created-by", handler.GetProductsByCreatedBy)

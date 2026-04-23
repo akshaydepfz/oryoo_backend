@@ -12,6 +12,7 @@ import (
 	"github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 	"oryoo.com/helper"
+	"oryoo.com/models"
 )
 
 type adminLoginRequest struct {
@@ -299,4 +300,45 @@ func AdminGetBillingTransactions(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(transactions)
+}
+
+// AdminGetNotificationLogs returns all notification logs
+func AdminGetNotificationLogs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	rows, err := helper.DB.Query(`
+		SELECT id, user_id, template_key, message, sent_at, clicked
+		FROM notification_logs
+		ORDER BY sent_at DESC
+	`)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	logs := make([]models.NotificationLog, 0)
+	for rows.Next() {
+		var item models.NotificationLog
+		if err := rows.Scan(&item.ID, &item.UserID, &item.TemplateKey, &item.Message, &item.SentAt, &item.Clicked); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		logs = append(logs, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"count":   len(logs),
+		"logs":    logs,
+	})
 }
