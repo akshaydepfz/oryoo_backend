@@ -19,6 +19,7 @@ func main() {
 	http.Handle("/users", http.HandlerFunc(handler.UserHandler))
 	http.HandleFunc("/api/user/update-activity", handler.UpdateUserActivityHandler)
 	http.HandleFunc("/notification/clicked", handler.NotificationClickedHandler)
+	http.HandleFunc("/notification/logs", handler.GetNotificationLogsByUserIDHandler)
 	http.HandleFunc("/auth/check-phone", handler.CheckPhoneHandler)
 	http.HandleFunc("/auth/register", handler.CreateUserHandler)
 	http.HandleFunc("/clients", handler.ClientHandler)

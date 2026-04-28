@@ -525,6 +525,57 @@ func NotificationClickedHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// GetNotificationLogsByUserIDHandler handles GET /notification/logs?user_id=<firebase_uid>.
+func GetNotificationLogsByUserIDHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := strings.TrimSpace(r.URL.Query().Get("user_id"))
+	if userID == "" {
+		userID = strings.TrimSpace(r.URL.Query().Get("firebase_uid"))
+	}
+	if userID == "" {
+		http.Error(w, "user_id is required", http.StatusBadRequest)
+		return
+	}
+
+	rows, err := helper.DB.Query(`
+		SELECT id, user_id, template_key, message, sent_at, clicked
+		FROM notification_logs
+		WHERE user_id = $1
+		ORDER BY sent_at DESC
+	`, userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	logs := make([]models.NotificationLog, 0)
+	for rows.Next() {
+		var item models.NotificationLog
+		if err := rows.Scan(&item.ID, &item.UserID, &item.TemplateKey, &item.Message, &item.SentAt, &item.Clicked); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		logs = append(logs, item)
+	}
+	if err := rows.Err(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"count":   len(logs),
+		"user_id": userID,
+		"logs":    logs,
+	})
+}
+
 func ClientHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		CreateClient(w, r)
