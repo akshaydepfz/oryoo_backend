@@ -528,7 +528,10 @@ func InsertOrder(orderID, orderNumber string, req models.CreateOrderRequest) err
 			delivery_address,
 			notes,
 			added_by,
-			created_by     -- NEW FIELD
+			created_by,
+			gst_number,
+			discount,
+			delivery_fee
 		)
 		VALUES (
 			$1, $2, $3, $4, $5,
@@ -538,7 +541,10 @@ func InsertOrder(orderID, orderNumber string, req models.CreateOrderRequest) err
 			$10,
 			$11,
 			$12,
-			$13
+			$13,
+			$14,
+			$15,
+			$16
 		);
 	`
 
@@ -557,7 +563,10 @@ func InsertOrder(orderID, orderNumber string, req models.CreateOrderRequest) err
 		req.DeliveryAddress,
 		req.Notes,
 		req.AddedBy,
-		req.CreatedBy, // NEW VALUE
+		req.CreatedBy,
+		req.GstNumber,
+		models.AmountOrZero(req.Discount),
+		models.AmountOrZero(req.DeliveryFee),
 	)
 
 	return err
@@ -677,24 +686,115 @@ func DeleteOrder(orderID string) error {
 	return nil
 }
 
-func UpdateOrder(req models.OrderModel) error {
-	query := `
-		UPDATE orders SET
-			status = $1,
-			payment_status = $2,
-			updated_at = NOW()
-		WHERE id = $3
-	`
+func UpdateOrder(req models.OrderModel, bill *models.BillFieldUpdate, statusSet, paymentStatusSet bool) error {
+	query := `UPDATE orders SET updated_at = NOW()`
+	args := []interface{}{}
+	n := 1
 
-	_, err := DB.ExecContext(
-		context.Background(),
-		query,
-		req.Status,
-		req.PaymentStatus,
-		req.ID,
-	)
+	if statusSet {
+		query += fmt.Sprintf(", status = $%d", n)
+		args = append(args, req.Status)
+		n++
+	}
+	if paymentStatusSet {
+		query += fmt.Sprintf(", payment_status = $%d", n)
+		args = append(args, req.PaymentStatus)
+		n++
+	}
 
+	if bill != nil {
+		if bill.GstNumberSet {
+			query += fmt.Sprintf(", gst_number = $%d", n)
+			args = append(args, bill.GstNumber)
+			n++
+		}
+		if bill.DiscountSet {
+			query += fmt.Sprintf(", discount = $%d", n)
+			args = append(args, bill.Discount)
+			n++
+		}
+		if bill.DeliveryFeeSet {
+			query += fmt.Sprintf(", delivery_fee = $%d", n)
+			args = append(args, bill.DeliveryFee)
+			n++
+		}
+		if bill.TotalAmountSet {
+			query += fmt.Sprintf(", total_amount = $%d", n)
+			args = append(args, bill.TotalAmount)
+			n++
+		}
+	}
+
+	query += fmt.Sprintf(" WHERE id = $%d", n)
+	args = append(args, req.ID)
+
+	_, err := DB.ExecContext(context.Background(), query, args...)
 	return err
+}
+
+const orderSelectColumns = `
+			id,
+			order_number,
+			client_id,
+			client_name,
+			client_avatar,
+			total_amount,
+			status,
+			payment_status,
+			created_at,
+			updated_at,
+			delivery_date,
+			delivery_address,
+			notes,
+			added_by,
+			created_by,
+			gst_number,
+			discount,
+			delivery_fee`
+
+func scanOrderRow(scanner interface{ Scan(dest ...any) error }, o *models.OrderModel) error {
+	return scanner.Scan(
+		&o.ID,
+		&o.OrderNumber,
+		&o.ClientID,
+		&o.ClientName,
+		&o.ClientAvatar,
+		&o.TotalAmount,
+		&o.Status,
+		&o.PaymentStatus,
+		&o.CreatedAt,
+		&o.UpdatedAt,
+		&o.DeliveryDate,
+		&o.DeliveryAddress,
+		&o.Notes,
+		&o.AddedBy,
+		&o.CreatedBy,
+		&o.GstNumber,
+		&o.Discount,
+		&o.DeliveryFee,
+	)
+}
+
+func attachOrderItems(o *models.OrderModel) error {
+	items, err := FetchOrderItems(o.ID)
+	if err != nil {
+		return err
+	}
+	o.Items = items
+	return nil
+}
+
+func FetchOrderByID(orderID string) (*models.OrderModel, error) {
+	query := `SELECT ` + orderSelectColumns + ` FROM orders WHERE id = $1`
+	var o models.OrderModel
+	err := scanOrderRow(DB.QueryRowContext(context.Background(), query, orderID), &o)
+	if err != nil {
+		return nil, err
+	}
+	if err := attachOrderItems(&o); err != nil {
+		return nil, err
+	}
+	return &o, nil
 }
 
 // MarkOrderPaid sets payment_status to paid and status to completed for an order_number.
@@ -712,23 +812,7 @@ func MarkOrderPaid(orderNumber string) error {
 }
 
 func GetAllOrders() ([]models.OrderModel, error) {
-	query := `
-		SELECT 
-			id,
-			order_number,
-			client_id,
-			client_name,
-			client_avatar,
-			total_amount,
-			status,
-			payment_status,
-			created_at,
-			updated_at,
-			delivery_date,
-			delivery_address,
-			notes,
-			added_by,
-			created_by
+	query := `SELECT ` + orderSelectColumns + `
 		FROM orders
 		ORDER BY created_at DESC;
 	`
@@ -742,54 +826,19 @@ func GetAllOrders() ([]models.OrderModel, error) {
 	var orders []models.OrderModel
 	for rows.Next() {
 		var o models.OrderModel
-		err := rows.Scan(
-			&o.ID,
-			&o.OrderNumber,
-			&o.ClientID,
-			&o.ClientName,
-			&o.ClientAvatar,
-			&o.TotalAmount,
-			&o.Status,
-			&o.PaymentStatus,
-			&o.CreatedAt,
-			&o.UpdatedAt,
-			&o.DeliveryDate,
-			&o.DeliveryAddress,
-			&o.Notes,
-			&o.AddedBy,
-			&o.CreatedBy,
-		)
-		if err != nil {
+		if err := scanOrderRow(rows, &o); err != nil {
 			return nil, err
 		}
-		items, err := FetchOrderItems(o.ID)
-		if err != nil {
+		if err := attachOrderItems(&o); err != nil {
 			return nil, err
 		}
-		o.Items = items
 		orders = append(orders, o)
 	}
 	return orders, nil
 }
 
 func FetchOrdersByCreatedBy(createdBy string) ([]models.OrderModel, error) {
-	query := `
-		SELECT 
-			id,
-			order_number,
-			client_id,
-			client_name,
-			client_avatar,
-			total_amount,
-			status,
-			payment_status,
-			created_at,
-			updated_at,
-			delivery_date,
-			delivery_address,
-			notes,
-			added_by,
-			created_by
+	query := `SELECT ` + orderSelectColumns + `
 		FROM orders
 		WHERE created_by = $1
 		ORDER BY created_at DESC;
@@ -805,37 +854,12 @@ func FetchOrdersByCreatedBy(createdBy string) ([]models.OrderModel, error) {
 
 	for rows.Next() {
 		var o models.OrderModel
-
-		err := rows.Scan(
-			&o.ID,
-			&o.OrderNumber,
-			&o.ClientID,
-			&o.ClientName,
-			&o.ClientAvatar,
-			&o.TotalAmount,
-			&o.Status,
-			&o.PaymentStatus,
-			&o.CreatedAt,
-			&o.UpdatedAt,
-			&o.DeliveryDate,
-			&o.DeliveryAddress,
-			&o.Notes,
-			&o.AddedBy,
-			&o.CreatedBy,
-		)
-
-		if err != nil {
+		if err := scanOrderRow(rows, &o); err != nil {
 			return nil, err
 		}
-
-		// 🔥 FETCH ITEMS HERE
-		items, err := FetchOrderItems(o.ID)
-		if err != nil {
+		if err := attachOrderItems(&o); err != nil {
 			return nil, err
 		}
-
-		o.Items = items
-
 		orders = append(orders, o)
 	}
 

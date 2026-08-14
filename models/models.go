@@ -1,6 +1,9 @@
 package models
 
 import (
+	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -136,22 +139,194 @@ type OrderModel struct {
 	Notes           *string          `json:"notes,omitempty"`
 	AddedBy         *string          `json:"added_by,omitempty"`
 	CreatedBy       *string          `json:"created_by,omitempty"` // NEW FIELD
+	GstNumber       *string          `json:"gst_number"`
+	Discount        float64          `json:"discount"`
+	DeliveryFee     float64          `json:"delivery_fee"`
 }
 
 type CreateOrderRequest struct {
-	ClientID        string  `json:"client_id"`
-	ClientName      string  `json:"client_name"`
-	ClientAvatar    *string `json:"client_avatar"`
-	TotalAmount     float64 `json:"total_amount"`
-	Status          string  `json:"status"`
-	PaymentStatus   string  `json:"payment_status"`
-	DeliveryAddress string  `json:"delivery_address"`
-	DeliveryDate    *string `json:"delivery_date"`
-	Notes           *string `json:"notes"`
-	AddedBy         *string `json:"added_by"`
-	CreatedBy       *string `json:"created_by"` // NEW FIELD
+	ClientID        string   `json:"client_id"`
+	ClientName      string   `json:"client_name"`
+	ClientAvatar    *string  `json:"client_avatar"`
+	TotalAmount     float64  `json:"total_amount"`
+	Status          string   `json:"status"`
+	PaymentStatus   string   `json:"payment_status"`
+	DeliveryAddress string   `json:"delivery_address"`
+	DeliveryDate    *string  `json:"delivery_date"`
+	Notes           *string  `json:"notes"`
+	AddedBy         *string  `json:"added_by"`
+	CreatedBy       *string  `json:"created_by"` // NEW FIELD
+	GstNumber       *string  `json:"gst_number"`
+	Discount        *float64 `json:"discount"`
+	DeliveryFee     *float64 `json:"delivery_fee"`
 
 	Items []OrderItemModel `json:"items"`
+}
+
+// UpdateOrderRequest is the body for /orders/update. Extra fields from older
+// clients are ignored. gst_number/discount/delivery_fee are optional.
+type UpdateOrderRequest struct {
+	ID            string   `json:"id"`
+	Status        string   `json:"status"`
+	PaymentStatus string   `json:"payment_status"`
+	GstNumber     *string  `json:"gst_number"`
+	Discount      *float64 `json:"discount"`
+	DeliveryFee   *float64 `json:"delivery_fee"`
+}
+
+// BillFieldUpdate is a partial update for optional bill fields.
+// Unset flags leave the existing database value unchanged.
+type BillFieldUpdate struct {
+	GstNumber      *string
+	GstNumberSet   bool
+	Discount       float64
+	DiscountSet    bool
+	DeliveryFee    float64
+	DeliveryFeeSet bool
+	TotalAmount    float64
+	TotalAmountSet bool
+}
+
+func AmountOrZero(v *float64) float64 {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
+func NormalizeGSTNumber(v *string) *string {
+	if v == nil {
+		return nil
+	}
+	s := strings.TrimSpace(*v)
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func ValidateBillAdjustments(discount, deliveryFee float64) error {
+	if discount < 0 {
+		return fmt.Errorf("discount must not be negative")
+	}
+	if deliveryFee < 0 {
+		return fmt.Errorf("delivery_fee must not be negative")
+	}
+	return nil
+}
+
+func NormalizeBillAdjustments(discount, deliveryFee *float64) (float64, float64, error) {
+	d := AmountOrZero(discount)
+	f := AmountOrZero(deliveryFee)
+	if err := ValidateBillAdjustments(d, f); err != nil {
+		return 0, 0, err
+	}
+	return d, f, nil
+}
+
+func SubtotalFromItems(items []OrderItemModel) float64 {
+	var subtotal float64
+	for _, item := range items {
+		subtotal += item.Price * float64(item.Quantity)
+	}
+	return subtotal
+}
+
+// CalculateFinalBillAmount computes:
+//
+//	Final Amount = Subtotal - Discount + Delivery Fee + Existing Tax/GST
+//
+// Existing tax/GST is the amount already included in totalAmount above item
+// subtotal (client-side tax is not recalculated). When discount and
+// deliveryFee are both 0, totalAmount is returned unchanged.
+func CalculateFinalBillAmount(totalAmount, discount, deliveryFee float64, items []OrderItemModel) float64 {
+	if discount == 0 && deliveryFee == 0 {
+		return totalAmount
+	}
+
+	subtotal := SubtotalFromItems(items)
+	tax := 0.0
+	if subtotal > 0 && totalAmount > subtotal {
+		tax = totalAmount - subtotal
+	}
+	if subtotal == 0 {
+		subtotal = totalAmount
+	}
+	return subtotal - discount + deliveryFee + tax
+}
+
+// RecalculateFinalBillAmount reapplies discount and delivery fee on an
+// existing stored total without changing the original tax/GST base.
+func RecalculateFinalBillAmount(currentTotal, currentDiscount, currentDeliveryFee, newDiscount, newDeliveryFee float64) float64 {
+	base := currentTotal + currentDiscount - currentDeliveryFee
+	return base - newDiscount + newDeliveryFee
+}
+
+func ResolveCreateBillFields(req *CreateOrderRequest) error {
+	if req == nil {
+		return nil
+	}
+	discount, deliveryFee, err := NormalizeBillAdjustments(req.Discount, req.DeliveryFee)
+	if err != nil {
+		return err
+	}
+	req.GstNumber = NormalizeGSTNumber(req.GstNumber)
+	req.Discount = &discount
+	req.DeliveryFee = &deliveryFee
+	req.TotalAmount = CalculateFinalBillAmount(req.TotalAmount, discount, deliveryFee, req.Items)
+	return nil
+}
+
+func ResolveUpdateBillFields(existing *OrderModel, gstNumber *string, gstSet bool, discount *float64, discountSet bool, deliveryFee *float64, deliverySet bool) (*BillFieldUpdate, error) {
+	if existing == nil {
+		return nil, fmt.Errorf("order not found")
+	}
+	if !gstSet && !discountSet && !deliverySet {
+		return nil, nil
+	}
+
+	bill := &BillFieldUpdate{}
+	newDiscount := existing.Discount
+	newDelivery := existing.DeliveryFee
+
+	if gstSet {
+		bill.GstNumberSet = true
+		bill.GstNumber = NormalizeGSTNumber(gstNumber)
+	}
+	if discountSet {
+		d := AmountOrZero(discount)
+		if err := ValidateBillAdjustments(d, 0); err != nil {
+			return nil, err
+		}
+		bill.DiscountSet = true
+		bill.Discount = d
+		newDiscount = d
+	}
+	if deliverySet {
+		f := AmountOrZero(deliveryFee)
+		if err := ValidateBillAdjustments(0, f); err != nil {
+			return nil, err
+		}
+		bill.DeliveryFeeSet = true
+		bill.DeliveryFee = f
+		newDelivery = f
+	}
+	if discountSet || deliverySet {
+		bill.TotalAmountSet = true
+		bill.TotalAmount = RecalculateFinalBillAmount(
+			existing.TotalAmount,
+			existing.Discount,
+			existing.DeliveryFee,
+			newDiscount,
+			newDelivery,
+		)
+	}
+	return bill, nil
+}
+
+func JSONFieldPresent(raw map[string]json.RawMessage, key string) bool {
+	_, ok := raw[key]
+	return ok
 }
 
 type PaymentModel struct {

@@ -68,6 +68,17 @@ func main() {
 	http.HandleFunc("/products/", handler.DeleteProductHandler)
 	http.HandleFunc("/products", handler.ProductHandler)
 
+	// Marketing Spend - register specific paths first
+	http.HandleFunc("/marketing-spend/create", handler.MarketingSpendCreateHandler)
+	http.HandleFunc("/marketing-spend/summary", handler.MarketingSpendSummaryHandler)
+	http.HandleFunc("/marketing-spend/", handler.MarketingSpendByIDHandler)
+	http.HandleFunc("/marketing-spend", handler.MarketingSpendCollectionHandler)
+
+	// Feature Requests - register specific paths first
+	http.HandleFunc("/feature-requests/create", handler.FeatureRequestCreateHandler)
+	http.HandleFunc("/feature-requests/", handler.FeatureRequestByIDHandler)
+	http.HandleFunc("/feature-requests", handler.FeatureRequestCollectionHandler)
+
 	//mailService := mailer.NewMailService()
 	// if err := mailService.SendTestEmail(mailer.DefaultFrom, "hi@oryoo.in", "Oryoo backend Mailgun test"); err != nil {
 	// 	log.Fatalf("mail send: %v", err)

@@ -701,6 +701,11 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := models.ResolveCreateBillFields(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	// Generate IDs
 	orderID := uuid.New().String()
 	orderNumber := "ORD-" + time.Now().Format("20060102-150405")
@@ -743,10 +748,20 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 func UpdateOrder(w http.ResponseWriter, r *http.Request) {
-	var req models.OrderModel
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
 
-	// Decode JSON
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(body, &raw); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	var req models.UpdateOrderRequest
+	if err := json.Unmarshal(body, &req); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
@@ -756,8 +771,34 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	gstSet := models.JSONFieldPresent(raw, "gst_number")
+	discountSet := models.JSONFieldPresent(raw, "discount")
+	deliverySet := models.JSONFieldPresent(raw, "delivery_fee")
+	statusSet := models.JSONFieldPresent(raw, "status")
+	paymentStatusSet := models.JSONFieldPresent(raw, "payment_status")
+
+	var bill *models.BillFieldUpdate
+	if gstSet || discountSet || deliverySet {
+		existing, fetchErr := helper.FetchOrderByID(req.ID)
+		if fetchErr != nil {
+			http.Error(w, "Order not found", http.StatusNotFound)
+			return
+		}
+		bill, err = models.ResolveUpdateBillFields(existing, req.GstNumber, gstSet, req.Discount, discountSet, req.DeliveryFee, deliverySet)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	update := models.OrderModel{
+		ID:            req.ID,
+		Status:        req.Status,
+		PaymentStatus: req.PaymentStatus,
+	}
+
 	// Update order
-	err := helper.UpdateOrder(req)
+	err = helper.UpdateOrder(update, bill, statusSet, paymentStatusSet)
 	if err != nil {
 		http.Error(w, "Failed to update order: "+err.Error(), http.StatusInternalServerError)
 		return

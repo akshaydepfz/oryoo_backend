@@ -160,6 +160,15 @@ func runMigrations(db *sql.DB) {
 		WHERE COALESCE(NULLIF(LOWER(btrim(status)), ''), 'pending') <> 'paid';`); err != nil {
 		log.Printf("Migration payments pending owner index: %v", err)
 	}
+	if err := AlterOrdersTableAddBillFields(db); err != nil {
+		log.Printf("Migration orders bill fields: %v", err)
+	}
+	if err := CreateMarketingSpendTable(db); err != nil {
+		log.Printf("Migration marketing_spend table: %v", err)
+	}
+	if err := CreateFeatureRequestsTable(db); err != nil {
+		log.Printf("Migration feature_requests table: %v", err)
+	}
 }
 
 // RunSitesMigrations adds missing columns for Sites UI. Safe to run on every startup.
@@ -296,7 +305,10 @@ func CreateOrdersTable() error {
 
 			delivery_address TEXT NOT NULL,
 			notes TEXT,
-			added_by TEXT
+			added_by TEXT,
+			gst_number TEXT,
+			discount DOUBLE PRECISION NOT NULL DEFAULT 0,
+			delivery_fee DOUBLE PRECISION NOT NULL DEFAULT 0
 		);
 	`
 
@@ -332,6 +344,22 @@ func CreateOrderItemsTable() error {
 	}
 
 	fmt.Println("Order items table created successfully")
+	return nil
+}
+
+// AlterOrdersTableAddBillFields adds optional GST number, discount, and delivery fee.
+// Idempotent; safe to run on every startup.
+func AlterOrdersTableAddBillFields(db *sql.DB) error {
+	stmts := []string{
+		`ALTER TABLE orders ADD COLUMN IF NOT EXISTS gst_number TEXT;`,
+		`ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount DOUBLE PRECISION NOT NULL DEFAULT 0;`,
+		`ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_fee DOUBLE PRECISION NOT NULL DEFAULT 0;`,
+	}
+	for _, stmt := range stmts {
+		if _, err := db.ExecContext(context.Background(), stmt); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -424,6 +452,74 @@ func AlterProductsTableAddImageURL(db *sql.DB) error {
 	_, err := db.ExecContext(context.Background(),
 		`ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT;`)
 	return err
+}
+
+// CreateMarketingSpendTable creates the marketing_spend table and indexes. Idempotent.
+func CreateMarketingSpendTable(db *sql.DB) error {
+	_, err := db.ExecContext(context.Background(), `
+		CREATE TABLE IF NOT EXISTS marketing_spend (
+			id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+			platform TEXT NOT NULL,
+			campaign_name TEXT NOT NULL,
+			amount_spent NUMERIC(12,2) NOT NULL,
+			start_date DATE NOT NULL,
+			end_date DATE,
+			orders_generated INTEGER NOT NULL DEFAULT 0,
+			revenue_generated NUMERIC(12,2) NOT NULL DEFAULT 0,
+			notes TEXT,
+			created_by TEXT NOT NULL,
+			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+		);
+	`)
+	if err != nil {
+		return err
+	}
+	indexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_marketing_spend_created_by ON marketing_spend (created_by);`,
+		`CREATE INDEX IF NOT EXISTS idx_marketing_spend_start_date ON marketing_spend (start_date);`,
+		`CREATE INDEX IF NOT EXISTS idx_marketing_spend_platform ON marketing_spend (platform);`,
+	}
+	for _, stmt := range indexes {
+		if _, err := db.ExecContext(context.Background(), stmt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateFeatureRequestsTable creates the feature_requests table and indexes. Idempotent.
+func CreateFeatureRequestsTable(db *sql.DB) error {
+	_, err := db.ExecContext(context.Background(), `
+		CREATE TABLE IF NOT EXISTS feature_requests (
+			id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+			title TEXT NOT NULL,
+			description TEXT NOT NULL,
+			category TEXT,
+			created_by TEXT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'pending',
+			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			CONSTRAINT feature_requests_status_check CHECK (
+				status IN ('pending', 'reviewing', 'planned', 'completed', 'rejected')
+			)
+		);
+	`)
+	if err != nil {
+		return err
+	}
+	indexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_feature_requests_created_by ON feature_requests (created_by);`,
+		`CREATE INDEX IF NOT EXISTS idx_feature_requests_status ON feature_requests (status);`,
+		`CREATE INDEX IF NOT EXISTS idx_feature_requests_category ON feature_requests (category);`,
+		`CREATE INDEX IF NOT EXISTS idx_feature_requests_created_at ON feature_requests (created_at DESC);`,
+	}
+	for _, stmt := range indexes {
+		if _, err := db.ExecContext(context.Background(), stmt); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func CreateBillingTransactionsTable() error {
